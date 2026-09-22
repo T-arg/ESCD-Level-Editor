@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ESCD_AB Level Editor 0.8.3</title>
+<style>
+  :root {
+    --bg: #1b2230; --panel: #243044; --ink: #e8eef7; --muted: #9aacbf;
+    --accent: #4ecdc4; --warn: #ff6b6b; --door: #f4d35e; --exit: #c060ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px; background: #151b27; border-bottom: 1px solid #334;
+  }
+  header h1 { font-size: 16px; margin: 0; }
+  button, select, input {
+    background: #2e456e; color: #fff; border: 1px solid #000;
+    padding: 4px 8px; border-radius: 3px;
+  }
+  button:hover { background: #3d5d94; cursor: pointer; }
+  .layout { display: grid; grid-template-columns: 280px 1fr 320px; height: calc(100vh - 52px); }
+  .panel { padding: 12px; overflow: auto; background: var(--panel); }
+  .panel h2 { font-size: 13px; margin: 14px 0 8px; color: var(--accent); text-transform: uppercase; }
+  .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
+  .row label { min-width: 72px; color: var(--muted); }
+  .hint { color: var(--muted); font-size: 12px; }
+  .ok { color: #8fd18f; }
+  textarea {
+    width: 100%; min-height: 180px; background: #151b27; color: #cde;
+    font: 11px/1.35 ui-monospace, monospace; border: 1px solid #445; padding: 8px;
+  }
+  input[type=range] { width: 170px; }
+  .mapwrap {
+    position: relative; overflow: scroll; min-width: 0;
+    background: #1e2736
+      repeating-linear-gradient(0deg, transparent, transparent 19px, #2a3446 20px),
+      repeating-linear-gradient(90deg, transparent, transparent 19px, #2a3446 20px);
+  }
+  #mapzoom { transform-origin: 0 0; }
+  #map { position: relative; min-width: 2400px; min-height: 1800px; }
+  #lines { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+  .room {
+    position: absolute; width: 108px; height: 108px;
+    background: #2c3a50; border: 2px solid #6a7d99; border-radius: 6px;
+    cursor: grab; user-select: none;
+  }
+  .room.selected { border-color: var(--accent); box-shadow: 0 0 0 2px #4ecdc466; }
+  .room.exitroom { background: #3a2450; border-color: var(--exit); }
+  .room .label {
+    position: absolute; left: -2px; top: -16px; font-weight: 700; font-size: 12px;
+    pointer-events: none; text-shadow: 0 1px 2px #000;
+  }
+  .grid5 {
+    position: absolute; left: 18px; top: 18px; width: 72px; height: 72px;
+    display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr);
+    gap: 1px; pointer-events: none;
+  }
+  .cell { background: #3d516c; position: relative; }
+  .cell .ic {
+    position: absolute; inset: 0; font: 700 8px/14px sans-serif; text-align: center; color: #111;
+  }
+  .door {
+    position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    background: #4a5564; border: 2px solid #111; cursor: crosshair; z-index: 3; opacity: .35;
+  }
+  .door.exists { background: var(--door); opacity: 1; }
+  .door.closed { background: var(--warn); opacity: 1; }
+  .door.leveldoor { background: var(--exit); opacity: 1; box-shadow: 0 0 0 2px #fff; }
+  .door.N { left: 47px; top: -7px; }
+  .door.E { right: -7px; top: 47px; }
+  .door.S { left: 47px; bottom: -7px; }
+  .door.W { left: -7px; top: 47px; }
+  .handle {
+    position: absolute; width: 14px; height: 14px; border-radius: 3px; border: 1px solid #111;
+    font: 700 8px/12px sans-serif; text-align: center; cursor: crosshair; z-index: 4; color: #111;
+  }
+  .handle.tp { right: 4px; bottom: 4px; background: #00e5ff; }
+  .handle.sw { left: 4px; bottom: 4px; background: #ff9100; }
+  .linkline { stroke: #f4d35e; stroke-width: 2; fill: none; }
+  .linkline.closed { stroke: #ff6b6b; stroke-dasharray: 4 3; }
+  .linkline.exit { stroke: #c060ff; stroke-width: 2; fill: none; }
+  .tpline { stroke: #00e5ff; stroke-width: 2; fill: none; }
+  .swline { stroke: #ff9100; stroke-width: 2; fill: none; stroke-dasharray: 5 3; }
+  .dragline { stroke: #fff; stroke-width: 2; fill: none; }
+
+  .modalback {
+    display: none; position: fixed; inset: 0; background: #0008; z-index: 20;
+    align-items: center; justify-content: center;
+  }
+  .modalback.show { display: flex; }
+  .modal {
+    width: min(760px, 96vw); max-height: 94vh; overflow: auto;
+    background: #1c2534; border: 2px solid #4ecdc4; border-radius: 10px;
+    padding: 12px 14px 16px;
+  }
+  .modal.exitlook { border-color: var(--exit); }
+  .modalhead { display: flex; justify-content: space-between; align-items: center; }
+  .isowrap {
+    position: relative; width: 420px; height: 310px; margin: 8px auto;
+    background: #0b0b0b; border: 1px solid #445; image-rendering: pixelated;
+  }
+  .iso-layer { position: absolute; left: 0; top: 0; image-rendering: pixelated; }
+  .isotile {
+    position: absolute; width: 66px; height: 48px; cursor: pointer;
+    image-rendering: pixelated;
+    background-image: url(assets/floorTile_22x16.png);
+    background-size: 66px auto; background-repeat: no-repeat; background-position: 0 0;
+  }
+  .isotile.hover {
+    outline: none;
+    filter: brightness(0.85) sepia(1) hue-rotate(-50deg) saturate(8);
+  }
+  .isoitem { position: absolute; image-rendering: pixelated; cursor: pointer; }
+  .isodoor-label {
+    position: absolute; font: 700 12px system-ui, sans-serif; color: #fff;
+    text-shadow: 0 1px 2px #000; pointer-events: none; letter-spacing: .04em;
+  }
+  .doorbit { position: absolute; image-rendering: pixelated; pointer-events: none; }
+  .doorbit.missing { opacity: .28; }
+  .palette { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    display: flex; flex-direction: column; align-items: center;
+    width: 70px; padding: 6px 4px 4px; background: #2a3548; border: 1px solid #445;
+    border-radius: 4px; cursor: grab; font-size: 10px; color: #cde;
+  }
+  .sprsheet { image-rendering: pixelated; background-repeat: no-repeat; display: block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ESCD_AB Level Editor <span style="color:#9aacbf;font-weight:500">0.8.3</span></h1>
+  <button id="btnAdd">Add room</button>
+  <button id="btnDel">Delete selected</button>
+  <button id="btnExport">Refresh export</button>
+  <button id="btnImport">Import from textarea</button>
+</header>
+<div class="layout">
+  <div class="panel">
+    <h2>Map zoom</h2>
+    <div class="row">
+      <input id="zoom" type="range" min="25" max="400" value="100">
+      <span id="zoomVal">100%</span>
+    </div>
+    <h2>Level header</h2>
+    <div class="row"><label>Level name</label><input id="levelName" value="level00"></div>
+    <div class="row"><label>Exit room</label><input id="exitRoom" type="number" min="0" max="31" value="2"></div>
+    <div class="row">
+      <label>Exit door</label>
+      <select id="exitDoor">
+        <option value="0">NORTH</option>
+        <option value="1">EAST</option>
+        <option value="2">SOUTH</option>
+        <option value="3">WEST</option>
+      </select>
+    </div>
+    <h2>Selected room <span id="selTitle">—</span></h2>
+    <p class="hint">Map is top-down (north is up). Double-click a room to edit it in isometric view.</p>
+    <table>
+      <tr><td>N</td><td><input id="dN" type="number" min="0" max="31" placeholder="to"></td><td><label><input id="cN" type="checkbox"> closed</label></td></tr>
+      <tr><td>E</td><td><input id="dE" type="number" min="0" max="31" placeholder="to"></td><td><label><input id="cE" type="checkbox"> closed</label></td></tr>
+      <tr><td>S</td><td><input id="dS" type="number" min="0" max="31" placeholder="to"></td><td><label><input id="cS" type="checkbox"> closed</label></td></tr>
+      <tr><td>W</td><td><input id="dW" type="number" min="0" max="31" placeholder="to"></td><td><label><input id="cW" type="checkbox"> closed</label></td></tr>
+    </table>
+  </div>
+  <div class="mapwrap" id="mapwrap">
+    <div id="mapzoom"><div id="map"><svg id="lines"></svg></div></div>
+  </div>
+  <div class="panel">
+    <h2>How links work</h2>
+    <p class="hint">
+      Drag a <b>door dot</b> onto another room’s door to connect them.
+      Open-door lines are <b style="color:#f4d35e">yellow</b>. A link into the exit room is <b style="color:#c060ff">purple</b>; that approach door stays closed, the exit room door stays open.
+      Cyan <b>T</b> = teleport, orange <b>S</b> = switch — drag onto the target room.
+      <b>Click</b> a connected yellow/purple door, T, or S to drop the link and its data.
+    </p>
+    <h2>Floor influence</h2>
+    <p class="hint">
+      For the highlighted room (when it has a switch), tick which of its target room’s floor slots the switch toggles.
+    </p>
+    <div id="infChecks"></div>
+    <h2>C export</h2>
+    <textarea id="out" spellcheck="false"></textarea>
+    <p class="hint ok">Rooms are 0-based. Max 32 rooms.</p>
+  </div>
+</div>
+
+<div class="modalback" id="modalback">
+  <div class="modal" id="modal">
+    <div class="modalhead">
+      <h3 id="modalTitle">Room</h3>
+      <button id="btnClose">Close</button>
+    </div>
+    <p class="hint">Drag a palette sprite onto a tile. It snaps to the game’s tile center. Click a placed sprite to remove it. One thing per tile. Room 0 tile 12 is the droid start.</p>
+    <div class="isowrap" id="isowrap"></div>
+    <h2>Palette</h2>
+    <div class="palette" id="palette"></div>
+  </div>
+</div>
+
+<script>
+const DIRS = ['N','E','S','W'];
+const OPP = {N:'S', E:'W', S:'N', W:'E'};
+const DIR_BIT = {N:0, E:1, S:2, W:3};
+const ENEMY = ['BOX','FLYER','MOVER','SHOOTER'];
+const OBJECT = ['BLACK CARD','WHITE CARD','BATTERY','BULLET','CHIP','TELEPORT','SWITCH OFF','SWITCH ON'];
+const FLOOR = ['NONE','BOX','SPIKE','PIRAMIDE','PIT','type5','type6','LEVEL UP'];
+const LEVEL_UP_TYPE = 7;
+const START_TILE = 12;
+const S = 3;
+const OX = 16;
+const OY = 8;
+
+const SLOT_META = [
+  {key:'enemy1', label:'Enemy 1', color:'#e74c3c', kind:'enemy'},
+  {key:'enemy2', label:'Enemy 2', color:'#e67e22', kind:'enemy'},
+  {key:'object', label:'Object', color:'#9b59b6', kind:'object'},
+  {key:'floors.0', label:'Floor 1', color:'#3498db', kind:'floor'},
+  {key:'floors.1', label:'Floor 2', color:'#2ecc71', kind:'floor'},
+  {key:'floors.2', label:'Floor 3', color:'#f1c40f', kind:'floor'},
+  {key:'floors.3', label:'Floor 4', color:'#1abc9c', kind:'floor'},
+  {key:'floors.4', label:'Floor 5', color:'#ecf0f1', kind:'floor'}
+];
+
+function emptyRoom(id) {
+  return {
+    id,
+    x: 40 + (id % 6) * 140,
+    y: 40 + Math.floor(id / 6) * 140,
+    doors: {
+      N: {to: null, destDoor: 'S', closed: false},
+      E: {to: null, destDoor: 'W', closed: false},
+      S: {to: null, destDoor: 'N', closed: false},
+      W: {to: null, destDoor: 'E', closed: false}
+    },
+    enemy1: {on:false, type:0, tile:12},
+    enemy2: {on:false, type:0, tile:8},
+    object: {on:false, type:0, tile:12},
+    floors: Array.from({length:5}, () => ({on:false, type:1, tile:0})),
+    teleportTo: null,
+    switchTo: null,
+    switchMask: 0b00011111
+  };
+}
+
+const state = {
+  rooms: [emptyRoom(0)], selected: 0, transporters: [], influences: [],
+  exitRoom: 2, exitDoor: 0, levelName: 'level00', zoom: 1, editRoom: null
+};
+
+function tileXY(t) { return { x: t % 5, y: Math.floor(t / 5) }; }
+function translateTileToX(t) { return (((((t / 5) | 0) * 6 + 4) - t) * 12) + 3; }
+function translateTileToY(t) { return 18 + (t * 6) - (((t / 5) | 0) * 24); }
+function floorDraw(t) {
+  const {x, y} = tileXY(t);
+  return { x: OX + (48 - 12 * x + 12 * y) * S, y: OY + (27 + 6 * x + 6 * y) * S };
+}
+function itemDraw(kind, t) {
+  const ex = translateTileToX(t), ey = translateTileToY(t);
+  if (kind === 'floor') return { x: OX + (ex - 3) * S, y: OY + (ey + 9) * S };
+  if (kind === 'object') return { x: OX + (ex + 4) * S, y: OY + (ey + 6) * S };
+  return { x: OX + ex * S, y: OY + ey * S };
+}
+function tileDepth(t) { const {x,y} = tileXY(t); return x + y; }
+function getEnt(room, key) {
+  const p = key.split('.');
+  return p[0] === 'floors' ? room.floors[+p[1]] : room[p[0]];
+}
+function occupiedBy(room, tile, exceptKey) {
+  for (const s of SLOT_META) {
+    if (s.key === exceptKey) continue;
+    const e = getEnt(room, s.key);
+    if (e.on && e.tile === tile) return s;
+  }
+  return null;
+}
+function isStartBlocked(room, tile) { return room.id === 0 && tile === START_TILE; }
+function isLevelUpTile(room, tile) {
+  return room.id === state.exitRoom && tile === START_TILE;
+}
+function canPlace(room, tile, kind, type, exceptKey) {
+  if (tile < 0 || tile > 24) return 'Invalid tile';
+  if (isStartBlocked(room, tile)) return 'Tile 12 in room 0 is the droid start';
+  if (isLevelUpTile(room, tile)) return 'Tile 12 in the exit room is the level-up floor';
+  if (kind === 'floor' && type === LEVEL_UP_TYPE) return 'Level-up floor is automatic';
+  const hit = occupiedBy(room, tile, exceptKey);
+  if (hit) return 'Tile already used by ' + hit.label;
+  return null;
+}
+function freeSlot(room, kind) {
+  if (kind === 'enemy') {
+    if (!room.enemy1.on) return 'enemy1';
+    if (!room.enemy2.on) return 'enemy2';
+    return null;
+  }
+  if (kind === 'object') return room.object.on ? null : 'object';
+  for (let i = 0; i < 5; i++) if (!room.floors[i].on) return 'floors.'+i;
+  return null;
+}
+function doorExists(room, dir) {
+  const t = room.doors[dir].to;
+  return t !== null && t !== '';
+}
+function isLevelDoor(room, dir) {
+  return room.id === state.exitRoom && DIR_BIT[dir] === state.exitDoor;
+}
+function leadsToExit(room, dir) {
+  return doorExists(room, dir) && +room.doors[dir].to === state.exitRoom;
+}
+function linkTouchesExit(room, dir) {
+  if (!doorExists(room, dir)) return false;
+  return room.id === state.exitRoom || +room.doors[dir].to === state.exitRoom;
+}
+function doorIsClosed(room, dir) {
+  if (!doorExists(room, dir)) return false;
+  if (leadsToExit(room, dir)) return true;
+  if (room.id === state.exitRoom) return false;
+  return !!room.doors[dir].closed;
+}
+function doorClass(room, dir) {
+  if (!doorExists(room, dir)) return '';
+  if (linkTouchesExit(room, dir)) return 'leveldoor exists';
+  return doorIsClosed(room, dir) ? 'closed exists' : 'exists';
+}
+function hasTeleport(room) { return room.object.on && room.object.type === 5; }
+function hasSwitch(room) { return room.object.on && (room.object.type === 6 || room.object.type === 7); }
+function doorAnchor(room, dir) {
+  const off = {N:[54,0], E:[108,54], S:[54,108], W:[0,54]};
+  return {x: room.x + off[dir][0], y: room.y + off[dir][1]};
+}
+function roomCenter(room) { return {x: room.x + 54, y: room.y + 54}; }
+
+function ensureLevelUpFloor(room) {
+  const existing = room.floors.find(f => f.on && f.type === LEVEL_UP_TYPE);
+  if (existing) { existing.tile = START_TILE; return; }
+  const taken = occupiedBy(room, START_TILE, null);
+  if (taken && taken.kind !== 'floor') {
+    getEnt(room, taken.key).on = false;
+  }
+  let slot = room.floors.find(f => !f.on || f.type === LEVEL_UP_TYPE);
+  if (!slot) slot = room.floors[4];
+  slot.on = true; slot.type = LEVEL_UP_TYPE; slot.tile = START_TILE;
+}
+function clearLevelUpFloor(room) {
+  room.floors.forEach(f => { if (f.type === LEVEL_UP_TYPE) f.on = false; });
+}
+
+function sizeMap() {
+  const map = document.getElementById('map');
+  const svg = document.getElementById('lines');
+  let w = 2400, h = 1800;
+  state.rooms.forEach(r => { w = Math.max(w, r.x + 240); h = Math.max(h, r.y + 240); });
+  map.style.width = w+'px'; map.style.height = h+'px';
+  svg.setAttribute('width', w); svg.setAttribute('height', h);
+  svg.style.width = w+'px'; svg.style.height = h+'px';
+}
+function applyZoom() {
+  document.getElementById('mapzoom').style.transform = 'scale(' + state.zoom + ')';
+  document.getElementById('zoomVal').textContent = Math.round(state.zoom * 100) + '%';
+}
+
+function topdownIndex(row, col) {
+  return row * 5 + (4 - col);
+}
+function miniMark(room, t) {
+  if (room.id === state.exitRoom && t === START_TILE) return {ch:'▲', bg:'#c060ff', fg:'#111'};
+  if (room.id === 0 && t === START_TILE) return {ch:'D', bg:'#b7950b', fg:'#111'};
+  if (room.enemy1.on && room.enemy1.tile === t) return {ch:'E', bg:'#e6c200', fg:'#111'};
+  if (room.enemy2.on && room.enemy2.tile === t) return {ch:'E', bg:'#e6c200', fg:'#111'};
+  if (room.object.on && room.object.tile === t) {
+    const ty = room.object.type;
+    if (ty === 0) return {ch:'B', bg:'#111', fg:'#fff'};
+    if (ty === 1) return {ch:'W', bg:'#f5f5f5', fg:'#111'};
+    if (ty === 2) return {ch:'L', bg:'#c0392b', fg:'#fff'};
+    if (ty === 3) return {ch:'A', bg:'#27ae60', fg:'#111'};
+    if (ty === 4) return {ch:'C', bg:'#1a5276', fg:'#fff'};
+    if (ty === 5) return {ch:'T', bg:'#00e5ff', fg:'#111'};
+    if (ty === 6 || ty === 7) return {ch:'S', bg:'#ff9100', fg:'#111'};
+  }
+  for (const f of room.floors) {
+    if (f.on && f.tile === t && f.type !== LEVEL_UP_TYPE) return {ch:'F', bg:'#e67e22', fg:'#111'};
+  }
+  return null;
+}
+function miniGrid(room) {
+  let html = '<div class="grid5">';
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col < 5; col++) {
+      const m = miniMark(room, topdownIndex(row, col));
+      html += `<div class="cell">${m ? `<div class="ic" style="background:${m.bg};color:${m.fg}">${m.ch}</div>` : ''}</div>`;
+    }
+  }
+  return html + '</div>';
+}
+
+function renderMap() {
+  const map = document.getElementById('map');
+  const keepSvg = document.getElementById('lines');
+  map.innerHTML = '';
+  map.appendChild(keepSvg);
+  sizeMap();
+  state.rooms.forEach(room => {
+    const div = document.createElement('div');
+    div.className = 'room' + (state.selected === room.id ? ' selected' : '') + (room.id === state.exitRoom ? ' exitroom' : '');
+    div.id = 'room'+room.id;
+    div.style.left = room.x+'px';
+    div.style.top = room.y+'px';
+    div.innerHTML = `<div class="label">${room.id}${room.id===state.exitRoom?' ★':''}</div>` +
+      miniGrid(room) +
+      DIRS.map(d => `<div class="door ${d} ${doorClass(room,d)}" data-room="${room.id}" data-dir="${d}" title="${d} — drag to connect, click to clear"></div>`).join('') +
+      (hasTeleport(room) ? `<div class="handle tp" data-link="tp" data-room="${room.id}" title="Teleport — drag to dest, click to clear">T</div>` : '') +
+      (hasSwitch(room) ? `<div class="handle sw" data-link="sw" data-room="${room.id}" title="Switch — drag to dest, click to clear">S</div>` : '');
+    map.appendChild(div);
+    makeRoomDraggable(div, room);
+    div.addEventListener('mousedown', e => {
+      if (e.target.classList.contains('door') || e.target.classList.contains('handle')) return;
+      selectRoom(room.id);
+    });
+    div.addEventListener('dblclick', e => {
+      if (e.target.classList.contains('door') || e.target.classList.contains('handle')) return;
+      openRoomEditor(room.id);
+    });
+    div.querySelectorAll('.door').forEach(h => {
+      h.addEventListener('mousedown', e => beginDoorGesture(e, room, h.dataset.dir));
+    });
+    div.querySelectorAll('.handle').forEach(h => {
+      h.addEventListener('mousedown', e => beginLinkGesture(e, room, h.dataset.link));
+    });
+  });
+  drawLinks();
+  renderPanel();
+  exportLevel();
+}
+
+function makeRoomDraggable(el, room) {
+  el.addEventListener('mousedown', ev => {
+    if (ev.target.classList.contains('door') || ev.target.classList.contains('handle')) return;
+    ev.preventDefault();
+    const sx = ev.clientX, sy = ev.clientY, ox = room.x, oy = room.y;
+    function move(e) {
+      room.x = Math.max(0, ox + (e.clientX - sx) / state.zoom);
+      room.y = Math.max(0, oy + (e.clientY - sy) / state.zoom);
+      el.style.left = room.x+'px'; el.style.top = room.y+'px';
+      sizeMap(); drawLinks();
+    }
+    function up() {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    }
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  });
+}
+
+let drag = null;
+function mapPoint(e) {
+  const wrap = document.getElementById('mapwrap');
+  const p = wrap.getBoundingClientRect();
+  return {
+    x: (e.clientX - p.left + wrap.scrollLeft) / state.zoom,
+    y: (e.clientY - p.top + wrap.scrollTop) / state.zoom
+  };
+}
+function beginDoorGesture(ev, room, dir) {
+  ev.stopPropagation(); ev.preventDefault();
+  const sx = ev.clientX, sy = ev.clientY;
+  let started = false;
+  function move(e) {
+    if (!started && Math.hypot(e.clientX - sx, e.clientY - sy) > 6) {
+      started = true;
+      startDoorDrag(room.id, dir);
+    }
+  }
+  function up() {
+    window.removeEventListener('mousemove', move);
+    window.removeEventListener('mouseup', up);
+    if (!started && doorExists(room, dir)) {
+      clearDoor(room.id, dir);
+      renderMap();
+    }
+  }
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up);
+}
+function beginLinkGesture(ev, room, kind) {
+  ev.stopPropagation(); ev.preventDefault();
+  const sx = ev.clientX, sy = ev.clientY;
+  let started = false;
+  function move(e) {
+    if (!started && Math.hypot(e.clientX - sx, e.clientY - sy) > 6) {
+      started = true;
+      startLinkDrag(room.id, kind);
+    }
+  }
+  function up() {
+    window.removeEventListener('mousemove', move);
+    window.removeEventListener('mouseup', up);
+    if (!started) {
+      if (kind === 'tp') room.teleportTo = null;
+      else room.switchTo = null;
+      renderMap();
+    }
+  }
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up);
+}
+function startDoorDrag(fromRoom, fromDir) {
+  const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.setAttribute('class','dragline');
+  document.getElementById('lines').appendChild(line);
+  const a = doorAnchor(state.rooms.find(r=>r.id===fromRoom), fromDir);
+  line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+  line.setAttribute('x2', a.x); line.setAttribute('y2', a.y);
+  drag = {fromRoom, fromDir, line};
+  window.addEventListener('mousemove', onDragMove);
+  window.addEventListener('mouseup', onDoorUp);
+}
+function startLinkDrag(fromRoom, kind) {
+  const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.setAttribute('class', kind === 'tp' ? 'tpline' : 'swline');
+  document.getElementById('lines').appendChild(line);
+  const a = roomCenter(state.rooms.find(r=>r.id===fromRoom));
+  line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+  line.setAttribute('x2', a.x); line.setAttribute('y2', a.y);
+  drag = {link: kind, fromRoom, line};
+  window.addEventListener('mousemove', onDragMove);
+  window.addEventListener('mouseup', onLinkUp);
+}
+function onDragMove(e) {
+  if (!drag) return;
+  const p = mapPoint(e);
+  drag.line.setAttribute('x2', p.x); drag.line.setAttribute('y2', p.y);
+}
+function onDoorUp(e) {
+  window.removeEventListener('mousemove', onDragMove);
+  window.removeEventListener('mouseup', onDoorUp);
+  if (!drag || drag.link) return;
+  const target = document.elementFromPoint(e.clientX, e.clientY);
+  if (target && target.classList.contains('door')) {
+    const toRoom = +target.dataset.room, toDir = target.dataset.dir;
+    if (toRoom !== drag.fromRoom) connectDoors(drag.fromRoom, drag.fromDir, toRoom, toDir);
+  }
+  drag.line.remove(); drag = null; renderMap();
+}
+function onLinkUp(e) {
+  window.removeEventListener('mousemove', onDragMove);
+  window.removeEventListener('mouseup', onLinkUp);
+  if (!drag || !drag.link) return;
+  const p = mapPoint(e);
+  let hit = null, best = 1e9;
+  state.rooms.forEach(r => {
+    const c = roomCenter(r);
+    const d = (c.x-p.x)**2 + (c.y-p.y)**2;
+    if (d < best && d < 70*70 && r.id !== drag.fromRoom) { best = d; hit = r; }
+  });
+  const src = state.rooms.find(r => r.id === drag.fromRoom);
+  if (hit && src) {
+    if (drag.link === 'tp') src.teleportTo = hit.id;
+    else src.switchTo = hit.id;
+  }
+  drag.line.remove(); drag = null; renderMap();
+}
+function clearDoor(roomId, dir) {
+  const room = state.rooms.find(r => r.id === roomId);
+  if (!room) return;
+  const d = room.doors[dir];
+  if (!doorExists(room, dir)) return;
+  const other = state.rooms.find(r => r.id === +d.to);
+  if (other) {
+    const od = d.destDoor || OPP[dir];
+    if (other.doors[od] && +other.doors[od].to === roomId) other.doors[od].to = null;
+  }
+  d.to = null;
+}
+function connectDoors(aId, aDir, bId, bDir) {
+  const A = state.rooms.find(r => r.id === aId);
+  const B = state.rooms.find(r => r.id === bId);
+  if (!A || !B) return;
+  clearDoor(aId, aDir); clearDoor(bId, bDir);
+  A.doors[aDir].to = bId; A.doors[aDir].destDoor = bDir;
+  B.doors[bDir].to = aId; B.doors[bDir].destDoor = aDir;
+  if (bId === state.exitRoom) { A.doors[aDir].closed = true; B.doors[bDir].closed = false; }
+  if (aId === state.exitRoom) { B.doors[bDir].closed = true; A.doors[aDir].closed = false; }
+  if (aId === state.exitRoom || bId === state.exitRoom) {
+    const exit = state.rooms.find(r => r.id === state.exitRoom);
+    if (exit) ensureLevelUpFloor(exit);
+  }
+}
+function drawLinks() {
+  const svg = document.getElementById('lines');
+  [...svg.querySelectorAll('line')].forEach(n => n.remove());
+  const seen = new Set();
+  state.rooms.forEach(room => {
+    DIRS.forEach(dir => {
+      if (!doorExists(room, dir)) return;
+      const d = room.doors[dir];
+      const key = [room.id+dir, d.to+d.destDoor].sort().join('|');
+      if (seen.has(key)) return;
+      seen.add(key);
+      const other = state.rooms.find(r => r.id === +d.to);
+      if (!other) return;
+      const a = doorAnchor(room, dir);
+      const b = doorAnchor(other, d.destDoor || OPP[dir]);
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+      line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+      const toExit = linkTouchesExit(room, dir);
+      line.setAttribute('class', toExit ? 'linkline exit' : ('linkline' + (doorIsClosed(room, dir) ? ' closed' : '')));
+      svg.appendChild(line);
+    });
+    if (hasTeleport(room) && room.teleportTo != null && room.teleportTo !== '') {
+      const dest = state.rooms.find(r => r.id === +room.teleportTo);
+      if (dest) {
+        const a = roomCenter(room), b = roomCenter(dest);
+        const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+        line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+        line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+        line.setAttribute('class', 'tpline');
+        svg.appendChild(line);
+      }
+    }
+    if (hasSwitch(room) && room.switchTo != null && room.switchTo !== '') {
+      const dest = state.rooms.find(r => r.id === +room.switchTo);
+      if (dest) {
+        const a = roomCenter(room), b = roomCenter(dest);
+        const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+        line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+        line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+        line.setAttribute('class', 'swline');
+        svg.appendChild(line);
+      }
+    }
+  });
+}
+function selectRoom(id) {
+  state.selected = id;
+  document.querySelectorAll('.room').forEach(el => el.classList.toggle('selected', el.id === 'room'+id));
+  renderPanel();
+}
+
+function renderPanel() {
+  const room = state.rooms.find(r => r.id === state.selected);
+  document.getElementById('selTitle').textContent = room ? '#'+room.id : '—';
+  document.getElementById('levelName').value = state.levelName;
+  document.getElementById('exitRoom').value = state.exitRoom;
+  document.getElementById('exitDoor').value = state.exitDoor;
+  if (!room) return;
+  DIRS.forEach(d => {
+    document.getElementById('d'+d).value = doorExists(room, d) ? room.doors[d].to : '';
+    document.getElementById('c'+d).checked = doorIsClosed(room, d);
+  });
+  const box = document.getElementById('infChecks');
+  if (!hasSwitch(room)) {
+    box.innerHTML = '<p class="hint">Highlight a room that contains a switch to edit floor influence.</p>';
+  } else {
+    box.innerHTML = [1,2,3,4,5].map(i => {
+      const bit = 5 - i;
+      const on = !!(room.switchMask & (1 << bit));
+      return `<div class="row"><label>Floor ${i}</label><label><input type="checkbox" data-bit="${bit}" ${on?'checked':''}> influenced</label></div>`;
+    }).join('');
+    box.querySelectorAll('[data-bit]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const bit = +inp.dataset.bit;
+        if (inp.checked) room.switchMask |= (1 << bit);
+        else room.switchMask &= ~(1 << bit);
+        exportLevel();
+      });
+    });
+  }
+}
+
+function spriteEl(kind, type) {
+  const el = document.createElement('div');
+  el.className = 'sprsheet';
+  if (kind === 'enemy') {
+    el.style.width = (16*S)+'px'; el.style.height = (24*S)+'px';
+    el.style.backgroundImage = 'url(assets/enemies_16x24.png)';
+    el.style.backgroundSize = (16*S)+'px auto';
+    el.style.backgroundPosition = '0 ' + (-(type * 4) * 24 * S) + 'px';
+  } else if (kind === 'object') {
+    el.style.width = (8*S)+'px'; el.style.height = (16*S)+'px';
+    el.style.backgroundImage = 'url(assets/elements_8x16.png)';
+    el.style.backgroundSize = (8*S)+'px auto';
+    el.style.backgroundPosition = '0 ' + (-(type * 6) * 16 * S) + 'px';
+  } else if (kind === 'floor') {
+    el.style.width = (22*S)+'px'; el.style.height = (16*S)+'px';
+    el.style.backgroundImage = 'url(assets/floorTile_22x16.png)';
+    el.style.backgroundSize = (22*S)+'px auto';
+    el.style.backgroundPosition = '0 ' + (-Math.min(type,7) * 16 * S) + 'px';
+  } else if (kind === 'droid') {
+    el.style.width = (16*S)+'px'; el.style.height = (24*S)+'px';
+    el.style.backgroundImage = 'url(assets/droid_16x24.png)';
+    el.style.backgroundSize = (16*S)+'px auto';
+  }
+  return el;
+}
+function sheetSpr(src, fw, fh, frame, scale) {
+  const el = document.createElement('div');
+  el.className = 'doorbit';
+  el.style.width = (fw*scale)+'px';
+  el.style.height = (fh*scale)+'px';
+  el.style.backgroundImage = 'url('+src+')';
+  el.style.backgroundSize = (fw*scale)+'px auto';
+  el.style.backgroundPosition = '0 ' + (-frame * fh * scale) + 'px';
+  return el;
+}
+
+const DOOR_DRAW = {
+  N: {lintel:[16,5], big:[24,21], small:[16,21], shut:[24,15], lab:[18,-8], name:'NORTH'},
+  E: {lintel:[80,5], big:[80,21], small:[95,21], shut:[85,15], lab:[86,-8], name:'EAST'},
+  S: {lintel:[81,38], big:[89,54], small:[81,54], shut:[89,48], lab:[86,92], name:'SOUTH'},
+  W: {lintel:[14,38], big:[14,54], small:[29,54], shut:[19,48], lab:[8,92], name:'WEST'}
+};
+
+function doorSheet(name, closed, toExit) {
+  if (toExit) return 'assets/' + name + '-purple.png';
+  if (closed) return 'assets/' + name + '-red.png';
+  return 'assets/' + name + '.png';
+}
+function placeDoorBits(wrap, room, dir) {
+  if (!doorExists(room, dir)) return;
+  const fr = DIR_BIT[dir];
+  const pos = DOOR_DRAW[dir];
+  const closed = doorIsClosed(room, dir);
+  const toExit = linkTouchesExit(room, dir);
+  const bits = [
+    [doorSheet('doorLintel_23x16', closed, toExit), 23, 16, pos.lintel],
+    [doorSheet('doorPostBig_15x32', closed, toExit), 15, 32, pos.big],
+    [doorSheet('doorPostSmall_8x32', closed, toExit), 8, 32, pos.small]
+  ];
+  bits.forEach(([src,w,h,xy]) => {
+    const el = sheetSpr(src, w, h, fr, S);
+    el.style.left = (OX + xy[0]*S) + 'px';
+    el.style.top = (OY + xy[1]*S) + 'px';
+    wrap.appendChild(el);
+  });
+  if (closed) {
+    const el = sheetSpr('assets/doorClossed_10x32.png', 10, 32, fr, S);
+    el.style.left = (OX + pos.shut[0]*S) + 'px';
+    el.style.top = (OY + pos.shut[1]*S) + 'px';
+    wrap.appendChild(el);
+  }
+  const lab = document.createElement('div');
+  lab.className = 'isodoor-label';
+  lab.textContent = pos.name;
+  lab.style.left = (OX + pos.lab[0]*S) + 'px';
+  lab.style.top = (OY + pos.lab[1]*S) + 'px';
+  wrap.appendChild(lab);
+}
+
+function openRoomEditor(id) {
+  state.editRoom = id; state.selected = id;
+  document.getElementById('modalback').classList.add('show');
+  renderRoomEditor();
+}
+function closeRoomEditor() {
+  document.getElementById('modalback').classList.remove('show');
+  state.editRoom = null;
+  renderMap();
+}
+function renderRoomEditor() {
+  const room = state.rooms.find(r => r.id === state.editRoom);
+  if (!room) return;
+  document.getElementById('modal').classList.toggle('exitlook', room.id === state.exitRoom);
+  document.getElementById('modalTitle').textContent =
+    'Room ' + room.id + (room.id === state.exitRoom ? '  — LEVEL EXIT ROOM' : '');
+  const wrap = document.getElementById('isowrap');
+  wrap.innerHTML = '';
+
+  const tiles = [];
+  for (let t = 0; t < 25; t++) tiles.push(t);
+  tiles.sort((a,b) => tileDepth(a) - tileDepth(b));
+
+  // painter order matches the game z-buffer: N, E, tiles/items, S, W
+  placeDoorBits(wrap, room, 'N');
+  placeDoorBits(wrap, room, 'E');
+  tiles.forEach(t => {
+    const tile = document.createElement('div');
+    tile.className = 'isotile';
+    const o = floorDraw(t);
+    tile.style.left = o.x + 'px';
+    tile.style.top = o.y + 'px';
+    if (isLevelUpTile(room, t)) {
+      tile.style.backgroundPosition = '0 ' + (-5 * 16 * S) + 'px';
+    }
+    tile.title = 'tile ' + t;
+    tile.addEventListener('dragover', e => { e.preventDefault(); tile.classList.add('hover'); });
+    tile.addEventListener('dragleave', () => tile.classList.remove('hover'));
+    tile.addEventListener('drop', e => {
+      e.preventDefault();
+      tile.classList.remove('hover');
+      const raw = e.dataTransfer.getData('text/plain');
+      if (!raw) return;
+      placeOnTile(room, t, JSON.parse(raw));
+    });
+    wrap.appendChild(tile);
+  });
+
+  const placed = [];
+  if (room.id === 0) placed.push({kind:'droid', type:0, tile:START_TILE, key:null});
+  SLOT_META.forEach(s => {
+    const ent = getEnt(room, s.key);
+    if (ent.on) placed.push({kind:s.kind, type:ent.type, tile:ent.tile, key:s.key, label:s.label});
+  });
+  placed.sort((a,b) => tileDepth(a.tile) - tileDepth(b.tile));
+  placed.forEach(p => {
+    const item = spriteEl(p.kind, p.type);
+    item.classList.add('isoitem');
+    const pos = itemDraw(p.kind === 'droid' ? 'enemy' : p.kind, p.tile);
+    item.style.left = pos.x + 'px';
+    item.style.top = pos.y + 'px';
+    if (p.key) {
+      item.title = p.label + ' (click to remove)';
+      item.addEventListener('click', () => {
+        getEnt(room, p.key).on = false;
+        if (p.kind === 'object') { room.teleportTo = null; room.switchTo = null; }
+        renderRoomEditor(); exportLevel();
+      });
+    }
+    wrap.appendChild(item);
+  });
+  placeDoorBits(wrap, room, 'S');
+  placeDoorBits(wrap, room, 'W');
+
+  const pal = document.getElementById('palette');
+  pal.innerHTML = '';
+  const items = [
+    ...ENEMY.map((n,i) => ({kind:'enemy', type:i, label:n})),
+    ...OBJECT.map((n,i) => ({kind:'object', type:i, label:n})),
+    ...[1,2,3,4].map(i => ({kind:'floor', type:i, label:FLOOR[i]}))
+  ];
+  items.forEach(spec => {
+    if (!freeSlot(room, spec.kind)) return;
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    const spr = spriteEl(spec.kind, spec.type);
+    spr.style.transform = 'scale(.7)';
+    spr.style.transformOrigin = 'top center';
+    spr.style.marginBottom = spec.kind === 'enemy' ? '18px' : '10px';
+    chip.appendChild(spr);
+    const cap = document.createElement('div');
+    cap.textContent = spec.label;
+    chip.appendChild(cap);
+    chip.draggable = true;
+    chip.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', JSON.stringify(spec));
+      const ghost = spriteEl(spec.kind, spec.type);
+      ghost.style.position = 'absolute'; ghost.style.top = '-200px'; ghost.style.left = '0';
+      document.body.appendChild(ghost);
+      e.dataTransfer.setDragImage(ghost, ghost.offsetWidth/2, ghost.offsetHeight/2);
+      setTimeout(() => ghost.remove(), 0);
+    });
+    pal.appendChild(chip);
+  });
+}
+
+function placeOnTile(room, tile, spec) {
+  const err = canPlace(room, tile, spec.kind, spec.type, null);
+  if (err) { alert(err); return; }
+  const key = freeSlot(room, spec.kind);
+  if (!key) { alert('No free ' + spec.kind + ' slot'); return; }
+  const ent = getEnt(room, key);
+  ent.on = true; ent.type = spec.type; ent.tile = tile;
+  if (spec.kind === 'object') {
+    if (spec.type !== 5) room.teleportTo = null;
+    if (spec.type !== 6 && spec.type !== 7) room.switchTo = null;
+  }
+  renderRoomEditor(); exportLevel();
+}
+
+DIRS.forEach(d => {
+  document.getElementById('d'+d).addEventListener('change', () => {
+    const room = state.rooms.find(r => r.id === state.selected);
+    const v = document.getElementById('d'+d).value;
+    if (v === '') clearDoor(room.id, d);
+    else {
+      const dest = +v;
+      if (!state.rooms.find(r => r.id === dest)) {
+        const nr = emptyRoom(dest);
+        nr.x = room.x + ({N:0,E:150,S:0,W:-150}[d]);
+        nr.y = room.y + ({N:-150,E:0,S:150,W:0}[d]);
+        state.rooms.push(nr); state.rooms.sort((a,b)=>a.id-b.id);
+      }
+      connectDoors(room.id, d, dest, OPP[d]);
+    }
+    renderMap();
+  });
+  document.getElementById('c'+d).addEventListener('change', () => {
+    const room = state.rooms.find(r => r.id === state.selected);
+    room.doors[d].closed = document.getElementById('c'+d).checked;
+    renderMap();
+  });
+});
+document.getElementById('btnAdd').onclick = () => {
+  const ids = state.rooms.map(r => r.id);
+  let id = 0; while (ids.includes(id)) id++;
+  if (id >= 32) { alert('Max 32 rooms'); return; }
+  state.rooms.push(emptyRoom(id)); state.selected = id; renderMap();
+};
+document.getElementById('btnDel').onclick = () => {
+  if (state.rooms.length <= 1) return;
+  const id = state.selected;
+  state.rooms.forEach(r => DIRS.forEach(d => { if (+r.doors[d].to === id) r.doors[d].to = null; }));
+  state.rooms = state.rooms.filter(r => r.id !== id);
+  state.selected = state.rooms[0].id; renderMap();
+};
+document.getElementById('levelName').onchange = e => { state.levelName = e.target.value; exportLevel(); };
+document.getElementById('exitRoom').onchange = e => {
+  state.exitRoom = +e.target.value;
+  const exit = state.rooms.find(r => r.id === state.exitRoom);
+  if (exit) ensureLevelUpFloor(exit);
+  renderMap();
+};
+document.getElementById('exitDoor').onchange = e => { state.exitDoor = +e.target.value; renderMap(); };
+document.getElementById('btnExport').onclick = exportLevel;
+document.getElementById('btnImport').onclick = importLevel;
+document.getElementById('btnClose').onclick = closeRoomEditor;
+document.getElementById('modalback').addEventListener('click', e => { if (e.target.id === 'modalback') closeRoomEditor(); });
+document.getElementById('zoom').addEventListener('input', e => { state.zoom = (+e.target.value)/100; applyZoom(); });
+
+function packDoorByte(room, dir) {
+  const d = room.doors[dir];
+  if (!doorExists(room, dir)) return 0;
+  return ((d.to & 0x3f) << 2) | (DIR_BIT[d.destDoor || OPP[dir]] & 3);
+}
+function packEnt(ent) {
+  if (!ent.on) return 0;
+  return ((ent.tile & 0x1f) << 3) | (ent.type & 7);
+}
+function bin8(n) { return '0b' + (n & 255).toString(2).padStart(8,'0'); }
+
+function exportLevel() {
+  const rooms = [...state.rooms].sort((a,b)=>a.id-b.id);
+  state.transporters = rooms.filter(hasTeleport).map(r => (r.teleportTo == null ? 0 : +r.teleportTo));
+  state.influences = rooms.filter(hasSwitch).map(r => ({
+    inRoom: r.switchTo == null ? 0 : +r.switchTo,
+    atRoom: r.id,
+    mask: r.switchMask & 255
+  }));
+  const maxId = rooms.reduce((m,r)=>Math.max(m,r.id),0);
+  const byId = {}; rooms.forEach(r => byId[r.id] = r);
+  const list = [];
+  for (let i=0;i<=maxId;i++) list.push(byId[i] || emptyRoom(i));
+  const nT = Math.min(16, state.transporters.length);
+  const nI = Math.min(16, state.influences.length);
+  const nextDoor = ((state.exitRoom & 0x3f) << 2) | (state.exitDoor & 3);
+  let out = `const unsigned char PROGMEM ${state.levelName}[] =\n{\n`;
+  out += `  ${list.length},          // amount of rooms\n`;
+  out += `  ${nT},          // amount of transporters\n`;
+  out += `  ${nI},          // amount of rooms with influenceable objects\n\n`;
+  out += `  ${bin8(nextDoor)},  // NEXT LEVEL DOOR\n`;
+  out += `  ${bin8(state.exitRoom)},  // NEXT LEVEL ROOM\n\n`;
+  list.forEach(r => {
+    let flags = 0;
+    if (doorExists(r,'N')) flags |= 0b00010000;
+    if (doorExists(r,'E')) flags |= 0b00100000;
+    if (doorExists(r,'S')) flags |= 0b01000000;
+    if (doorExists(r,'W')) flags |= 0b10000000;
+    if (doorIsClosed(r,'N')) flags |= 0b00000001;
+    if (doorIsClosed(r,'E')) flags |= 0b00000010;
+    if (doorIsClosed(r,'S')) flags |= 0b00000100;
+    if (doorIsClosed(r,'W')) flags |= 0b00001000;
+    const bytes = [
+      flags, packDoorByte(r,'N'), packDoorByte(r,'E'), packDoorByte(r,'S'), packDoorByte(r,'W'),
+      packEnt(r.enemy1), packEnt(r.enemy2), packEnt(r.object), ...r.floors.map(packEnt)
+    ];
+    out += '  ' + bytes.map(bin8).join(', ') + `, // room${r.id}\n`;
+  });
+  out += `\n  // transporters\n`;
+  state.transporters.slice(0,nT).forEach((t,i) => { out += `  ${bin8(t & 0x3f)}, // T${i}\n`; });
+  out += `\n  // influence\n`;
+  state.influences.slice(0,nI).forEach((inf,i) => {
+    out += `  ${bin8(inf.inRoom & 0x3f)}, ${bin8(inf.mask)}, // I${i}\n`;
+  });
+  out += '};\n';
+  document.getElementById('out').value = out;
+}
+function parseByte(tok) {
+  tok = tok.trim().replace(/\/\/.*$/,'').replace(/,$/,'').trim();
+  if (!tok) return null;
+  if (tok.startsWith('0b') || tok.startsWith('0B')) return parseInt(tok.slice(2), 2);
+  if (tok.startsWith('0x') || tok.startsWith('0X')) return parseInt(tok, 16);
+  const n = parseInt(tok, 10);
+  return Number.isFinite(n) ? n : null;
+}
+function unpackDoor(byte, room, dir) {
+  if (!byte) { room.doors[dir].to = null; return; }
+  room.doors[dir].to = (byte >> 2) & 0x3f;
+  room.doors[dir].destDoor = DIRS[byte & 3];
+}
+function unpackEnt(byte) {
+  if (!byte) return {on:false, type:0, tile:0};
+  return {on:true, type: byte & 7, tile: (byte >> 3) & 0x1f};
+}
+function importLevel() {
+  const raw = document.getElementById('out').value;
+  const tokens = raw.replace(/\{/g,' ').replace(/\}/g,' ').split(/[,\n]/).map(parseByte).filter(v => v !== null);
+  if (tokens.length < 5) { alert('Could not parse array'); return; }
+  let i = 0;
+  const nRooms = tokens[i++], nT = tokens[i++], nI = tokens[i++];
+  const nextDoor = tokens[i++], nextRoom = tokens[i++];
+  state.exitDoor = nextDoor & 3;
+  state.exitRoom = nextRoom & 0x3f;
+  state.rooms = [];
+  for (let r = 0; r < nRooms; r++) {
+    const room = emptyRoom(r);
+    const flags = tokens[i++] || 0;
+    unpackDoor(tokens[i++]||0, room, 'N');
+    unpackDoor(tokens[i++]||0, room, 'E');
+    unpackDoor(tokens[i++]||0, room, 'S');
+    unpackDoor(tokens[i++]||0, room, 'W');
+    if (!(flags & 0b00010000)) room.doors.N.to = null;
+    if (!(flags & 0b00100000)) room.doors.E.to = null;
+    if (!(flags & 0b01000000)) room.doors.S.to = null;
+    if (!(flags & 0b10000000)) room.doors.W.to = null;
+    room.doors.N.closed = !!(flags & 0b00000001);
+    room.doors.E.closed = !!(flags & 0b00000010);
+    room.doors.S.closed = !!(flags & 0b00000100);
+    room.doors.W.closed = !!(flags & 0b00001000);
+    room.enemy1 = unpackEnt(tokens[i++]||0);
+    room.enemy2 = unpackEnt(tokens[i++]||0);
+    room.object = unpackEnt(tokens[i++]||0);
+    for (let f=0;f<5;f++) room.floors[f] = unpackEnt(tokens[i++]||0);
+    room.x = 40 + (r % 6) * 140;
+    room.y = 40 + Math.floor(r / 6) * 140;
+    state.rooms.push(room);
+  }
+  state.transporters = [];
+  for (let t=0;t<nT;t++) state.transporters.push((tokens[i++]||0) & 0x3f);
+  state.influences = [];
+  const infLeft = tokens.length - i;
+  const recSize = (nI > 0 && infLeft >= nI * 3) ? 3 : 2;
+  for (let k=0;k<nI;k++) {
+    const inRoom = (tokens[i++]||0)&0x3f;
+    let atRoom = 0, mask;
+    if (recSize === 3) atRoom = (tokens[i++]||0)&0x3f;
+    mask = tokens[i++]||0;
+    state.influences.push({ inRoom, atRoom, mask });
+  }
+  let ti = 0;
+  state.rooms.forEach(room => {
+    if (hasTeleport(room)) room.teleportTo = state.transporters[ti++] ?? 0;
+    const inf = state.influences.find(x => x.atRoom === room.id);
+    if (hasSwitch(room) && inf) { room.switchTo = inf.inRoom; room.switchMask = inf.mask; }
+  });
+  const exit = state.rooms.find(r => r.id === state.exitRoom);
+  if (exit) ensureLevelUpFloor(exit);
+  state.selected = 0;
+  renderMap();
+}
+
+applyZoom();
+renderMap();
+</script>
+</body>
+</html>
