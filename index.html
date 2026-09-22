@@ -133,6 +133,80 @@
 </style>
 </head>
 <body>
-SEE_DISK
+<header>
+  <a class="site-logo" href="https://t-arg.github.io/" title="TEAM a.r.g." target="_blank" rel="noopener noreferrer">
+    <img src="https://t-arg.github.io/images/TEAMarg.gif" alt="TEAM a.r.g.">
+  </a>
+  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.3</span></h1>
+  <button id="btnAdd">Add room</button>
+  <button id="btnDel">Delete selected</button>
+  <button id="btnExport">Refresh export</button>
+  <button id="btnImport">Import from textarea</button>
+</header>
+<div class="layout">
+  <div class="panel">
+    <h2>Map zoom</h2>
+    <div class="row">
+      <input id="zoom" type="range" min="25" max="400" value="100">
+      <span id="zoomVal">100%</span>
+    </div>
+    <h2>Level header</h2>
+    <div class="row"><label>Level name</label><input id="levelName" value="level00"></div>
+    <div class="row"><label>Exit room</label><input id="exitRoom" type="number" min="0" max="31" value="2"></div>
+    <div class="row">
+      <label>Exit door</label>
+      <select id="exitDoor">
+        <option value="0">NORTH</option>
+        <option value="1">EAST</option>
+        <option value="2">SOUTH</option>
+        <option value="3">WEST</option>
+      </select>
+    </div>
+    <h2>Selected room <span id="selTitle">—</span></h2>
+    <p class="hint">Map is top-down (north is up). Double-click a room to edit it in isometric view.</p>
+    <table>
+      <tr><td>N</td><td><input id="dN" type="number" min="0" max="31" placeholder="to"></td><td><label><input id="cN" type="checkbox"> closed</label></td></tr>
+      <tr><td>E</td><td><input id="dE" type="number" min="0" max="31" placeholder="to"></td><td><label><input id="cE" type="checkbox"> closed</label></td></tr>
+      <tr><td>S</td><td><input id="dS" type="number" min="0" max="31" placeholder="to"></td><td><label><input id="cS" type="checkbox"> closed</label></td></tr>
+      <tr><td>W</td><td><input id="dW" type="number" min="0" max="31" placeholder="to"></td><td><label><input id="cW" type="checkbox"> closed</label></td></tr>
+    </table>
+  </div>
+  <div class="mapwrap" id="mapwrap">
+    <div id="mapzoom"><div id="map"><svg id="lines"></svg></div></div>
+  </div>
+  <div class="panel">
+    <h2>How links work</h2>
+    <p class="hint">
+      Drag a <b>door dot</b> onto another room’s door to connect them.
+      Open-door lines are <b style="color:#f4d35e">yellow</b>. A link into the exit room is <b style="color:#c060ff">purple</b>; that approach door stays closed, the exit room door stays open.
+      Cyan <b>T</b> = teleport, orange <b>S</b> = switch — drag onto the target room.
+      <b>Click</b> a connected yellow/purple door, T, or S to drop the link and its data.
+    </p>
+    <h2>Floor influence</h2>
+    <p class="hint">
+      For the highlighted room (when it has a switch), tick which of its target room’s floor slots the switch toggles.
+    </p>
+    <div id="infChecks"></div>
+    <h2>C export</h2>
+    <textarea id="out" spellcheck="false"></textarea>
+    <p class="hint ok">Rooms are 0-based. Max 32 rooms.</p>
+  </div>
+</div>
+
+<div class="modalback" id="modalback">
+  <div class="modal" id="modal">
+    <div class="modalhead">
+      <h3 id="modalTitle">Room</h3>
+      <button id="btnClose">Close</button>
+    </div>
+    <p class="hint">Drag a palette sprite onto a tile. It snaps to the game’s tile center. Click a placed sprite to remove it. One thing per tile. Room 0 tile 12 is the droid start.</p>
+    <div class="isowrap" id="isowrap"></div>
+    <h2>Palette</h2>
+    <div class="palette" id="palette"></div>
+  </div>
+</div>
+
+<script src="editor.js"></script>
+
 </body>
 </html>
