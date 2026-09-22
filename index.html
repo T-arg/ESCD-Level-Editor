@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ESCD_AB Level Editor 0.8.3</title>
+<title>ESCD_AB Level Editor 0.8.4</title>
 <style>
   :root {
     --bg: #fefefd; --panel: #f5f5f3; --ink: #333; --muted: #6b5f5e;
@@ -16,16 +16,22 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
   .site-logo { display: flex; align-items: center; flex-shrink: 0; }
-  .site-logo img { height: 48px; width: auto; display: block; image-rendering: auto; }
+  .site-logo img { height: 48px; width: auto; display: block; }
   header h1 { font-size: 16px; margin: 0; color: #4a3b3a; letter-spacing: .04em; }
   button, select, input {
     background: #4a3b3a; color: #fefefd; border: 1px solid #4a3b3a;
     padding: 4px 8px; border-radius: 3px;
   }
   button:hover { background: #2e2424; cursor: pointer; }
-  input[type=number], input[type=text], #levelName { background: #fff; color: #333; border: 1px solid #4a3b3a; }
+  input[type=number], input[type=text] { background: #fff; color: #333; border: 1px solid #4a3b3a; }
   .layout { display: grid; grid-template-columns: 280px 1fr 320px; height: calc(100vh - 68px); }
   .panel { padding: 12px; overflow: auto; background: var(--panel); border-right: 1px solid #ddd; }
+  .levellist {
+    width: 100%; height: 132px; overflow-y: auto; background: #fff;
+    border: 1px solid #4a3b3a; color: #333; font: 12px/1.4 "Segoe UI", sans-serif;
+    margin: 4px 0 6px;
+  }
+  .levellist option { padding: 4px 8px; }
   .panel h2 { font-size: 13px; margin: 14px 0 8px; color: var(--accent); text-transform: uppercase; }
   .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
   .row label { min-width: 72px; color: var(--muted); }
@@ -137,7 +143,7 @@
   <a class="site-logo" href="https://t-arg.github.io/" title="TEAM a.r.g." target="_blank" rel="noopener noreferrer">
     <img src="https://t-arg.github.io/images/TEAMarg.gif" alt="TEAM a.r.g.">
   </a>
-  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.3</span></h1>
+  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.4</span></h1>
   <button id="btnAdd">Add room</button>
   <button id="btnDel">Delete selected</button>
   <button id="btnExport">Refresh export</button>
@@ -151,7 +157,13 @@
       <span id="zoomVal">100%</span>
     </div>
     <h2>Level header</h2>
-    <div class="row"><label>Level name</label><input id="levelName" value="level00"></div>
+    <h2>Selected level <span id="selLevel">#00</span></h2>
+    <select id="levelList" class="levellist" size="6"></select>
+    <div class="row">
+      <button id="btnAddLevel">Add level</button>
+      <button id="btnRemoveLevel">Remove level</button>
+    </div>
+    <div class="row"><label>Level name</label><input id="levelName" value="level00" readonly></div>
     <div class="row"><label>Exit room</label><input id="exitRoom" type="number" min="0" max="31" value="2"></div>
     <div class="row">
       <label>Exit door</label>
@@ -178,7 +190,7 @@
     <h2>How links work</h2>
     <p class="hint">
       Drag a <b>door dot</b> onto another room’s door to connect them.
-      Open-door lines are <b style="color:#f4d35e">yellow</b>. A link into the exit room is <b style="color:#c060ff">purple</b>; that approach door stays closed, the exit room door stays open.
+      Open-door lines are <b style="color:#f4d35e">yellow</b>. Closed-door lines are in <b style="color:#ff6b6b">red</b>. A link into the exit room is <b style="color:#c060ff">purple</b>; that approach door stays closed, the exit room door stays open.
       Cyan <b>T</b> = teleport, orange <b>S</b> = switch — drag onto the target room.
       <b>Click</b> a connected yellow/purple door, T, or S to drop the link and its data.
     </p>
@@ -188,6 +200,7 @@
     </p>
     <div id="infChecks"></div>
     <h2>C export</h2>
+    <div class="row"><button id="btnExportH">Export level.h</button></div>
     <textarea id="out" spellcheck="false"></textarea>
     <p class="hint ok">Rooms are 0-based. Max 32 rooms.</p>
   </div>
