@@ -1,1 +1,138 @@
-PLACEHOLDER
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ESCD_AB Level Editor 0.8.3</title>
+<style>
+  :root {
+    --bg: #fefefd; --panel: #f5f5f3; --ink: #333; --muted: #6b5f5e;
+    --accent: #4a3b3a; --warn: #c0392b; --door: #f4d35e; --exit: #c060ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.45 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--ink); }
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 8px 16px; background: #fefefd; border-bottom: 3px solid #4a3b3a;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  .site-logo { display: flex; align-items: center; flex-shrink: 0; }
+  .site-logo img { height: 48px; width: auto; display: block; image-rendering: auto; }
+  header h1 { font-size: 16px; margin: 0; color: #4a3b3a; letter-spacing: .04em; }
+  button, select, input {
+    background: #4a3b3a; color: #fefefd; border: 1px solid #4a3b3a;
+    padding: 4px 8px; border-radius: 3px;
+  }
+  button:hover { background: #2e2424; cursor: pointer; }
+  input[type=number], input[type=text], #levelName { background: #fff; color: #333; border: 1px solid #4a3b3a; }
+  .layout { display: grid; grid-template-columns: 280px 1fr 320px; height: calc(100vh - 68px); }
+  .panel { padding: 12px; overflow: auto; background: var(--panel); border-right: 1px solid #ddd; }
+  .panel h2 { font-size: 13px; margin: 14px 0 8px; color: var(--accent); text-transform: uppercase; }
+  .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
+  .row label { min-width: 72px; color: var(--muted); }
+  .hint { color: var(--muted); font-size: 12px; }
+  .ok { color: #3d7a3d; }
+  textarea {
+    width: 100%; min-height: 180px; background: #fff; color: #333;
+    font: 11px/1.35 ui-monospace, monospace; border: 1px solid #4a3b3a; padding: 8px;
+  }
+  input[type=range] { width: 170px; }
+  .mapwrap {
+    position: relative; overflow: scroll; min-width: 0;
+    background: #f5f5f3
+      repeating-linear-gradient(0deg, transparent, transparent 19px, #e4e0dc 20px),
+      repeating-linear-gradient(90deg, transparent, transparent 19px, #e4e0dc 20px);
+  }
+  #mapzoom { transform-origin: 0 0; }
+  #map { position: relative; min-width: 2400px; min-height: 1800px; }
+  #lines { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+  .room {
+    position: absolute; width: 108px; height: 108px;
+    background: #fff; border: 2px solid #4a3b3a; border-radius: 6px;
+    cursor: grab; user-select: none;
+  }
+  .room.selected { border-color: var(--accent); box-shadow: 0 0 0 2px #4a3b3a55; }
+  .room.exitroom { background: #efe6f7; border-color: var(--exit); }
+  .room .label {
+    position: absolute; left: -2px; top: -16px; font-weight: 700; font-size: 12px;
+    pointer-events: none; color: #4a3b3a;
+  }
+  .grid5 {
+    position: absolute; left: 18px; top: 18px; width: 72px; height: 72px;
+    display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr);
+    gap: 1px; pointer-events: none;
+  }
+  .cell { background: #ddd8d4; position: relative; }
+  .cell .ic {
+    position: absolute; inset: 0; font: 700 8px/14px sans-serif; text-align: center; color: #111;
+  }
+  .door {
+    position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    background: #4a5564; border: 2px solid #111; cursor: crosshair; z-index: 3; opacity: .35;
+  }
+  .door.exists { background: var(--door); opacity: 1; }
+  .door.closed { background: var(--warn); opacity: 1; }
+  .door.leveldoor { background: var(--exit); opacity: 1; box-shadow: 0 0 0 2px #fff; }
+  .door.N { left: 47px; top: -7px; }
+  .door.E { right: -7px; top: 47px; }
+  .door.S { left: 47px; bottom: -7px; }
+  .door.W { left: -7px; top: 47px; }
+  .handle {
+    position: absolute; width: 14px; height: 14px; border-radius: 3px; border: 1px solid #111;
+    font: 700 8px/12px sans-serif; text-align: center; cursor: crosshair; z-index: 4; color: #111;
+  }
+  .handle.tp { right: 4px; bottom: 4px; background: #00e5ff; }
+  .handle.sw { left: 4px; bottom: 4px; background: #ff9100; }
+  .linkline { stroke: #f4d35e; stroke-width: 2; fill: none; }
+  .linkline.closed { stroke: #ff6b6b; stroke-dasharray: 4 3; }
+  .linkline.exit { stroke: #c060ff; stroke-width: 2; fill: none; }
+  .tpline { stroke: #00e5ff; stroke-width: 2; fill: none; }
+  .swline { stroke: #ff9100; stroke-width: 2; fill: none; stroke-dasharray: 5 3; }
+  .dragline { stroke: #4a3b3a; stroke-width: 2; fill: none; }
+
+  .modalback {
+    display: none; position: fixed; inset: 0; background: #0008; z-index: 20;
+    align-items: center; justify-content: center;
+  }
+  .modalback.show { display: flex; }
+  .modal {
+    width: min(760px, 96vw); max-height: 94vh; overflow: auto;
+    background: #fefefd; border: 2px solid #4a3b3a; border-radius: 8px;
+    padding: 12px 14px 16px;
+  }
+  .modal.exitlook { border-color: var(--exit); }
+  .modalhead { display: flex; justify-content: space-between; align-items: center; }
+  .isowrap {
+    position: relative; width: 420px; height: 310px; margin: 8px auto;
+    background: #111; border: 1px solid #4a3b3a; image-rendering: pixelated;
+  }
+  .iso-layer { position: absolute; left: 0; top: 0; image-rendering: pixelated; }
+  .isotile {
+    position: absolute; width: 66px; height: 48px; cursor: pointer;
+    image-rendering: pixelated;
+    background-image: url(assets/floorTile_22x16.png);
+    background-size: 66px auto; background-repeat: no-repeat; background-position: 0 0;
+  }
+  .isotile.hover {
+    outline: none;
+    filter: brightness(0.85) sepia(1) hue-rotate(-50deg) saturate(8);
+  }
+  .isoitem { position: absolute; image-rendering: pixelated; cursor: pointer; }
+  .isodoor-label {
+    position: absolute; font: 700 12px system-ui, sans-serif; color: #fff;
+    text-shadow: 0 1px 2px #000; pointer-events: none; letter-spacing: .04em;
+  }
+  .doorbit { position: absolute; image-rendering: pixelated; pointer-events: none; }
+  .doorbit.missing { opacity: .28; }
+  .palette { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    display: flex; flex-direction: column; align-items: center;
+    width: 70px; padding: 6px 4px 4px; background: #fff; border: 1px solid #4a3b3a;
+    border-radius: 4px; cursor: grab; font-size: 10px; color: #4a3b3a;
+  }
+  .sprsheet { image-rendering: pixelated; background-repeat: no-repeat; display: block; }
+</style>
+</head>
+<body>
+SEE_DISK
+</body>
+</html>
