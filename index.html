@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ESCD_AB Level Editor 0.8.5</title>
+<title>ESCD_AB Level Editor 0.8.6</title>
 <style>
   :root {
     --bg: #fefefd; --panel: #f5f5f3; --ink: #333; --muted: #6b5f5e;
@@ -23,6 +23,7 @@
     padding: 4px 8px; border-radius: 3px;
   }
   button:hover { background: #2e2424; cursor: pointer; }
+  select:disabled { opacity: .9; cursor: default; background: #6b5f5e; }
   input[type=number], input[type=text] { background: #fff; color: #333; border: 1px solid #4a3b3a; }
   .layout { display: grid; grid-template-columns: 280px 1fr 320px; height: calc(100vh - 68px); }
   .panel { padding: 12px; overflow: auto; background: var(--panel); border-right: 1px solid #ddd; }
@@ -144,7 +145,7 @@
   <a class="site-logo" href="https://t-arg.github.io/" title="TEAM a.r.g." target="_blank" rel="noopener noreferrer">
     <img src="https://t-arg.github.io/images/TEAMarg.gif" alt="TEAM a.r.g.">
   </a>
-  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.5</span></h1>
+  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.6</span></h1>
   <button id="btnAdd">Add room</button>
   <button id="btnDel">Delete selected</button>
   <button id="btnExport">Refresh export</button>
@@ -168,13 +169,14 @@
     <div class="row"><label>Exit room</label><input id="exitRoom" type="number" min="0" max="31" value="2"></div>
     <div class="row">
       <label>Exit door</label>
-      <select id="exitDoor">
+      <select id="exitDoor" disabled title="Set by the purple link into the exit room">
         <option value="0">NORTH</option>
         <option value="1">EAST</option>
         <option value="2">SOUTH</option>
         <option value="3">WEST</option>
       </select>
     </div>
+    <p class="hint">Read-only: door in the next-level room, taken from the <b style="color:#c060ff">purple</b> link (the door you walk through leaving the previous room into the exit room).</p>
     <h2>Selected room <span id="selTitle">—</span></h2>
     <p class="hint">Map is top-down (north is up). Double-click a room to edit it in isometric view.</p>
     <table>
@@ -191,9 +193,9 @@
     <h2>How links work</h2>
     <p class="hint">
       Drag a <b>door dot</b> onto another room’s door to connect them.
-      Open-door lines are <b style="color:#f4d35e">yellow</b>. Closed-door lines are in <b style="color:#ff6b6b">red</b>. A link into the exit room is <b style="color:#c060ff">purple</b>; that approach door stays closed, the exit room door stays open.
-      Cyan <b>T</b> = teleport, orange <b>S</b> = switch — drag onto the target room.
-      <b>Click</b> a connected yellow/purple door, T, or S to drop the link and its data.
+      Open-door lines are <b style="color:#c9a227">yellow</b>. Closed-door lines are in <b style="color:#c0392b">red</b>. A link into the exit room is <b style="color:#c060ff">purple</b>; that approach door stays closed, the exit room door stays open. Only one <b style="color:#c060ff">purple</b> connection is allowed — drawing another disconnects the first, so the next-level room has exactly one door.
+      <b style="color:#00b8cc">Cyan</b> <b style="color:#00b8cc">T</b> = teleport, <b style="color:#e67e22">orange</b> <b style="color:#e67e22">S</b> = switch — drag onto the target room.
+      <b>Click</b> a connected <b style="color:#c9a227">yellow</b>/<b style="color:#c060ff">purple</b> door, <b style="color:#00b8cc">T</b>, or <b style="color:#e67e22">S</b> to drop the link and its data.
     </p>
     <h2>Floor influence</h2>
     <p class="hint">
@@ -617,18 +619,76 @@ function clearDoor(roomId, dir) {
   }
   d.to = null;
 }
+function pruneExtraExitLinks() {
+  const exit = state.rooms.find(r => r.id === state.exitRoom);
+  if (!exit) return;
+  let kept = null;
+  for (const d of DIRS) {
+    if (doorExists(exit, d)) { kept = d; break; }
+  }
+  if (kept == null) {
+    for (const room of state.rooms) {
+      if (room.id === state.exitRoom) continue;
+      for (const d of DIRS) {
+        if (leadsToExit(room, d)) { kept = room.doors[d].destDoor || OPP[d]; break; }
+      }
+      if (kept != null) break;
+    }
+  }
+  if (kept == null) return;
+  clearLinksIntoExit(state.exitRoom, kept);
+}
+function clearLinksIntoExit(keepRoom, keepDir) {
+  const exitId = state.exitRoom;
+  let keepOther = null, keepOtherDir = null;
+  if (keepRoom != null) {
+    const keep = state.rooms.find(r => r.id === keepRoom);
+    if (keep && doorExists(keep, keepDir)) {
+      keepOther = +keep.doors[keepDir].to;
+      keepOtherDir = keep.doors[keepDir].destDoor || OPP[keepDir];
+    }
+  }
+  state.rooms.forEach(room => {
+    DIRS.forEach(dir => {
+      if (keepRoom != null && room.id === keepRoom && dir === keepDir) return;
+      if (keepOther != null && room.id === keepOther && dir === keepOtherDir) return;
+      if (!doorExists(room, dir)) return;
+      if (room.id === exitId || +room.doors[dir].to === exitId) clearDoor(room.id, dir);
+    });
+  });
+}
+function doorOnExitRoom() {
+  const exit = state.rooms.find(r => r.id === state.exitRoom);
+  if (exit) {
+    for (const d of DIRS) if (doorExists(exit, d)) return d;
+  }
+  for (const room of state.rooms) {
+    if (room.id === state.exitRoom) continue;
+    for (const d of DIRS) {
+      if (leadsToExit(room, d)) return room.doors[d].destDoor || OPP[d];
+    }
+  }
+  return null;
+}
+function syncExitDoorFromLinks() {
+  const d = doorOnExitRoom();
+  if (d) state.exitDoor = DIR_BIT[d];
+}
 function connectDoors(aId, aDir, bId, bDir) {
   const A = state.rooms.find(r => r.id === aId);
   const B = state.rooms.find(r => r.id === bId);
   if (!A || !B) return;
+  const touchesExit = (aId === state.exitRoom || bId === state.exitRoom);
+  if (touchesExit) clearLinksIntoExit(null, null);
   clearDoor(aId, aDir); clearDoor(bId, bDir);
   A.doors[aDir].to = bId; A.doors[aDir].destDoor = bDir;
   B.doors[bDir].to = aId; B.doors[bDir].destDoor = aDir;
   if (bId === state.exitRoom) { A.doors[aDir].closed = true; B.doors[bDir].closed = false; }
   if (aId === state.exitRoom) { B.doors[bDir].closed = true; A.doors[aDir].closed = false; }
-  if (aId === state.exitRoom || bId === state.exitRoom) {
+  if (touchesExit) {
     const exit = state.rooms.find(r => r.id === state.exitRoom);
     if (exit) ensureLevelUpFloor(exit);
+    state.exitDoor = DIR_BIT[aId === state.exitRoom ? aDir : bDir];
   }
 }
 function drawLinks() {
@@ -690,6 +750,7 @@ function renderPanel() {
   document.getElementById('selTitle').textContent = room ? '#'+room.id : '—';
   document.getElementById('levelName').value = state.levelName;
   document.getElementById('exitRoom').value = state.exitRoom;
+  syncExitDoorFromLinks();
   document.getElementById('exitDoor').value = state.exitDoor;
   if (!room) return;
   DIRS.forEach(d => {
@@ -960,9 +1021,11 @@ document.getElementById('exitRoom').onchange = e => {
   state.exitRoom = +e.target.value;
   const exit = state.rooms.find(r => r.id === state.exitRoom);
   if (exit) ensureLevelUpFloor(exit);
+  pruneExtraExitLinks();
+  syncExitDoorFromLinks();
   renderMap();
 };
-document.getElementById('exitDoor').onchange = e => { state.exitDoor = +e.target.value; renderMap(); };
+document.getElementById('exitDoor').onchange = () => { syncExitDoorFromLinks(); renderPanel(); };
 document.getElementById('btnExport').onclick = exportLevel;
 document.getElementById('btnImport').onclick = importLevel;
 document.getElementById('btnClose').onclick = closeRoomEditor;
@@ -1107,6 +1170,8 @@ function importLevel() {
   });
   const exit = state.rooms.find(r => r.id === state.exitRoom);
   if (exit) ensureLevelUpFloor(exit);
+  pruneExtraExitLinks();
+  syncExitDoorFromLinks();
   state.selected = 0;
   renderMap();
 }
