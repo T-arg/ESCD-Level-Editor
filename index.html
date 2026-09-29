@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ESCD_AB Level Editor 0.8.6</title>
+<title>ESCD_AB Level Editor 0.8.7</title>
 <style>
   :root {
     --bg: #fefefd; --panel: #f5f5f3; --ink: #333; --muted: #6b5f5e;
@@ -145,7 +145,7 @@
   <a class="site-logo" href="https://t-arg.github.io/" title="TEAM a.r.g." target="_blank" rel="noopener noreferrer">
     <img src="https://t-arg.github.io/images/TEAMarg.gif" alt="TEAM a.r.g.">
   </a>
-  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.6</span></h1>
+  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.7</span></h1>
   <button id="btnAdd">Add room</button>
   <button id="btnDel">Delete selected</button>
   <button id="btnExport">Refresh export</button>
@@ -178,7 +178,7 @@
     </div>
     <p class="hint">Read-only: door in the next-level room, taken from the <b style="color:#c060ff">purple</b> link (the door you walk through leaving the previous room into the exit room).</p>
     <h2>Selected room <span id="selTitle">—</span></h2>
-    <p class="hint">Map is top-down (north is up). Double-click a room to edit it in isometric view.</p>
+    <p class="hint">Map is top-down (north is up). Double-click a room to edit it in isometric view. Rooms snap to the 20px grid.</p>
     <table>
       <tr><td>N</td><td><input id="dN" type="number" min="0" max="31" placeholder="to"></td><td><label><input id="cN" type="checkbox"> closed</label></td></tr>
       <tr><td>E</td><td><input id="dE" type="number" min="0" max="31" placeholder="to"></td><td><label><input id="cE" type="checkbox"> closed</label></td></tr>
@@ -205,7 +205,7 @@
     <h2>C export</h2>
     <div class="row"><button id="btnExportH">Export level.h</button></div>
     <textarea id="out" spellcheck="false"></textarea>
-    <p class="hint ok">Rooms are 0-based. Max 32 rooms.</p>
+    <p class="hint ok">Rooms are 0-based. Max 32 rooms. Map positions snap to the 20px grid and are stored in a <code>// LAYOUT</code> comment so import restores the same layout without compiling into the game.</p>
   </div>
 </div>
 
@@ -223,7 +223,6 @@
 </div>
 
 <script>
-
 const DIRS = ['N','E','S','W'];
 const OPP = {N:'S', E:'W', S:'N', W:'E'};
 const DIR_BIT = {N:0, E:1, S:2, W:3};
@@ -235,6 +234,7 @@ const START_TILE = 12;
 const S = 3;
 const OX = 16;
 const OY = 8;
+const GRID = 20;
 
 const SLOT_META = [
   {key:'enemy1', label:'Enemy 1', color:'#e74c3c', kind:'enemy'},
@@ -247,11 +247,18 @@ const SLOT_META = [
   {key:'floors.4', label:'Floor 5', color:'#ecf0f1', kind:'floor'}
 ];
 
+function snap(n) {
+  return Math.max(0, Math.round(n / GRID) * GRID);
+}
+function defaultRoomPos(id) {
+  return { x: snap(40 + (id % 6) * 140), y: snap(40 + Math.floor(id / 6) * 140) };
+}
 function emptyRoom(id) {
+  const pos = defaultRoomPos(id);
   return {
     id,
-    x: 40 + (id % 6) * 140,
-    y: 40 + Math.floor(id / 6) * 140,
+    x: pos.x,
+    y: pos.y,
     doors: {
       N: {to: null, destDoor: 'S', closed: false},
       E: {to: null, destDoor: 'W', closed: false},
@@ -268,7 +275,6 @@ function emptyRoom(id) {
   };
 }
 
-
 function levelNameFor(i){return "level"+String(i).padStart(2,"0");}
 function makeLevel(i){return {rooms:[emptyRoom(0)],selected:0,transporters:[],influences:[],exitRoom:2,exitDoor:0,levelName:levelNameFor(i),zoom:1,editRoom:null};}
 const project={levels:[makeLevel(0)],current:0};
@@ -280,7 +286,6 @@ function addLevel(){var i=project.levels.length;if(i>=32){alert("Max 32 levels")
 function removeLevel(){if(project.levels.length<=1){alert("Need at least one level");return;}project.levels.splice(project.current,1);syncLevelNames();switchLevel(Math.min(project.current,project.levels.length-1));}
 function levelsHHeader(){return ["#ifndef LEVELS_H","#define LEVELS_H","","#define MAX_AMOUNT_OF_ROOMS                       32","#define MAX_AMOUNT_OF_INFLUENCING_OBJECTS         16","#define MAX_AMOUNT_OF_TRANSPORTERS                16","#define AMOUNT_OF_ROOMS_AT_BYTE                   0","#define AMOUNT_OF_TRANSPORTERS_AT_BYTE            1","#define AMOUNT_OF_INFLUENCING_OBJECTS_AT_BYTE     2","#define LEVEL_DOOR_DATA_START_AT_BYTE             3","#define LEVEL_ROOM_DATA_START_AT_BYTE             4","#define ROOMS_DATA_START_AT_BYTE                  5","#define DOORS_DATA_START_AT_BYTE                  ROOMS_DATA_START_AT_BYTE + 1","#define ELEMENTS_DATA_START_AT_BYTE               ROOMS_DATA_START_AT_BYTE + 5","#define BYTES_USED_FOR_EVERY_ROOM                 13","",""].join(String.fromCharCode(10));}
 function exportLevelsH(){syncLevelNames();var NL=String.fromCharCode(10);var bodies=project.levels.map(function(lv){return exportLevelFrom(lv).trimEnd();});var names=project.levels.map(function(lv){return lv.levelName;});var out=levelsHHeader();out+=bodies.join(NL+NL)+NL+NL;out+="// pointer table in flash too - 2 bytes per level, no SRAM copy"+NL;out+="const unsigned char * const PROGMEM levels[] ="+NL+"{"+NL;out+="  "+names.join(", ")+NL+"};"+NL+NL;out+="#define AMOUNT_OF_LEVELS  (sizeof(levels) / sizeof(levels[0]))"+NL+NL;out+="#endif"+NL;var blob=new Blob([out],{type:"text/plain"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="level.h";a.click();URL.revokeObjectURL(a.href);}
-
 
 function tileXY(t) { return { x: t % 5, y: Math.floor(t / 5) }; }
 function translateTileToX(t) { return (((((t / 5) | 0) * 6 + 4) - t) * 12) + 3; }
@@ -364,7 +369,6 @@ function doorAnchor(room, dir) {
 }
 function roomCenter(room) { return {x: room.x + 54, y: room.y + 54}; }
 function handleAnchor(room, kind) {
-  // T is bottom-right 14x14 inset 4px; S is bottom-left 14x14 inset 4px
   if (kind === 'tp') return { x: room.x + 108 - 4 - 7, y: room.y + 108 - 4 - 7 };
   return { x: room.x + 4 + 7, y: room.y + 108 - 4 - 7 };
 }
@@ -485,14 +489,15 @@ function makeRoomDraggable(el, room) {
     ev.preventDefault();
     const sx = ev.clientX, sy = ev.clientY, ox = room.x, oy = room.y;
     function move(e) {
-      room.x = Math.max(0, ox + (e.clientX - sx) / state.zoom);
-      room.y = Math.max(0, oy + (e.clientY - sy) / state.zoom);
+      room.x = snap(ox + (e.clientX - sx) / state.zoom);
+      room.y = snap(oy + (e.clientY - sy) / state.zoom);
       el.style.left = room.x+'px'; el.style.top = room.y+'px';
       sizeMap(); drawLinks();
     }
     function up() {
       window.removeEventListener('mousemove', move);
       window.removeEventListener('mouseup', up);
+      exportLevel();
     }
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
@@ -551,151 +556,115 @@ function beginLinkGesture(ev, room, kind) {
   window.addEventListener('mousemove', move);
   window.addEventListener('mouseup', up);
 }
-function startDoorDrag(fromRoom, fromDir) {
-  const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-  line.setAttribute('class','dragline');
-  document.getElementById('lines').appendChild(line);
-  const a = doorAnchor(state.rooms.find(r=>r.id===fromRoom), fromDir);
-  line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
-  line.setAttribute('x2', a.x); line.setAttribute('y2', a.y);
-  drag = {fromRoom, fromDir, line};
-  window.addEventListener('mousemove', onDragMove);
-  window.addEventListener('mouseup', onDoorUp);
+function hitRoom(pt) {
+  return state.rooms.find(r => pt.x >= r.x && pt.x <= r.x + 108 && pt.y >= r.y && pt.y <= r.y + 108);
 }
-function startLinkDrag(fromRoom, kind) {
-  const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-  line.setAttribute('class', kind === 'tp' ? 'tpline' : 'swline');
-  (document.getElementById('toplines') || document.getElementById('lines')).appendChild(line);
-  const a = handleAnchor(state.rooms.find(r=>r.id===fromRoom), kind);
-  line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
-  line.setAttribute('x2', a.x); line.setAttribute('y2', a.y);
-  drag = {link: kind, fromRoom, line};
-  window.addEventListener('mousemove', onDragMove);
-  window.addEventListener('mouseup', onLinkUp);
+function hitDoor(pt) {
+  let best = null, bestD = 18;
+  state.rooms.forEach(r => DIRS.forEach(d => {
+    const a = doorAnchor(r, d);
+    const dist = Math.hypot(pt.x - a.x, pt.y - a.y);
+    if (dist < bestD) { bestD = dist; best = {room: r, dir: d}; }
+  }));
+  return best;
 }
-function onDragMove(e) {
-  if (!drag) return;
-  const p = mapPoint(e);
-  drag.line.setAttribute('x2', p.x); drag.line.setAttribute('y2', p.y);
-}
-function onDoorUp(e) {
-  window.removeEventListener('mousemove', onDragMove);
-  window.removeEventListener('mouseup', onDoorUp);
-  if (!drag || drag.link) return;
-  const target = document.elementFromPoint(e.clientX, e.clientY);
-  if (target && target.classList.contains('door')) {
-    const toRoom = +target.dataset.room, toDir = target.dataset.dir;
-    if (toRoom !== drag.fromRoom) connectDoors(drag.fromRoom, drag.fromDir, toRoom, toDir);
+function dragPreview(from, to) {
+  const svg = document.getElementById('toplines');
+  let line = document.getElementById('dragline');
+  if (!line) {
+    line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.id = 'dragline';
+    line.setAttribute('class', 'dragline');
+    svg.appendChild(line);
   }
-  drag.line.remove(); drag = null; renderMap();
+  line.setAttribute('x1', from.x); line.setAttribute('y1', from.y);
+  line.setAttribute('x2', to.x); line.setAttribute('y2', to.y);
 }
-function onLinkUp(e) {
-  window.removeEventListener('mousemove', onDragMove);
-  window.removeEventListener('mouseup', onLinkUp);
-  if (!drag || !drag.link) return;
-  const p = mapPoint(e);
-  let hit = null, best = 1e9;
-  state.rooms.forEach(r => {
-    const c = roomCenter(r);
-    const d = (c.x-p.x)**2 + (c.y-p.y)**2;
-    if (d < best && d < 70*70 && r.id !== drag.fromRoom) { best = d; hit = r; }
+function startDoorDrag(fromId, fromDir) {
+  const from = state.rooms.find(r => r.id === fromId);
+  function move(e) { dragPreview(doorAnchor(from, fromDir), mapPoint(e)); }
+  function up(e) {
+    window.removeEventListener('mousemove', move);
+    window.removeEventListener('mouseup', up);
+    const hit = hitDoor(mapPoint(e));
+    if (hit && hit.room.id !== fromId) connectDoors(fromId, fromDir, hit.room.id, hit.dir);
+    renderMap();
+  }
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up);
+}
+function startLinkDrag(fromId, kind) {
+  const from = state.rooms.find(r => r.id === fromId);
+  function move(e) { dragPreview(handleAnchor(from, kind), mapPoint(e)); }
+  function up(e) {
+    window.removeEventListener('mousemove', move);
+    window.removeEventListener('mouseup', up);
+    const dest = hitRoom(mapPoint(e));
+    if (dest && dest.id !== fromId) {
+      if (kind === 'tp') from.teleportTo = dest.id;
+      else from.switchTo = dest.id;
+    }
+    renderMap();
+  }
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up);
+}
+function clearDoor(id, dir) {
+  const room = state.rooms.find(r => r.id === id);
+  if (!room || !doorExists(room, dir)) return;
+  const destId = +room.doors[dir].to;
+  const destDir = room.doors[dir].destDoor || OPP[dir];
+  room.doors[dir].to = null;
+  room.doors[dir].closed = false;
+  const other = state.rooms.find(r => r.id === destId);
+  if (other && other.doors[destDir] && +other.doors[destDir].to === id) {
+    other.doors[destDir].to = null;
+    other.doors[destDir].closed = false;
+  }
+}
+function connectDoors(fromId, fromDir, toId, toDir) {
+  const a = state.rooms.find(r => r.id === fromId);
+  const b = state.rooms.find(r => r.id === toId);
+  if (!a || !b) return;
+  if (doorExists(a, fromDir)) clearDoor(fromId, fromDir);
+  if (doorExists(b, toDir)) clearDoor(toId, toDir);
+  a.doors[fromDir].to = toId;
+  a.doors[fromDir].destDoor = toDir;
+  b.doors[toDir].to = fromId;
+  b.doors[toDir].destDoor = fromDir;
+  pruneExtraExitLinks(fromId, fromDir);
+  syncExitDoorFromLinks();
+}
+function pruneExtraExitLinks(keepFrom, keepDir) {
+  const links = [];
+  state.rooms.forEach(r => DIRS.forEach(d => {
+    if (leadsToExit(r, d)) links.push({id:r.id, dir:d});
+  }));
+  if (links.length <= 1) return;
+  const keep = links.find(l => l.id === keepFrom && l.dir === keepDir) || links[0];
+  links.forEach(l => {
+    if (l.id === keep.id && l.dir === keep.dir) return;
+    clearDoor(l.id, l.dir);
   });
-  const src = state.rooms.find(r => r.id === drag.fromRoom);
-  if (hit && src) {
-    if (drag.link === 'tp') src.teleportTo = hit.id;
-    else src.switchTo = hit.id;
-  }
-  drag.line.remove(); drag = null; renderMap();
-}
-function clearDoor(roomId, dir) {
-  const room = state.rooms.find(r => r.id === roomId);
-  if (!room) return;
-  const d = room.doors[dir];
-  if (!doorExists(room, dir)) return;
-  const other = state.rooms.find(r => r.id === +d.to);
-  if (other) {
-    const od = d.destDoor || OPP[dir];
-    if (other.doors[od] && +other.doors[od].to === roomId) other.doors[od].to = null;
-  }
-  d.to = null;
-}
-function pruneExtraExitLinks() {
-  const exit = state.rooms.find(r => r.id === state.exitRoom);
-  if (!exit) return;
-  let kept = null;
-  for (const d of DIRS) {
-    if (doorExists(exit, d)) { kept = d; break; }
-  }
-  if (kept == null) {
-    for (const room of state.rooms) {
-      if (room.id === state.exitRoom) continue;
-      for (const d of DIRS) {
-        if (leadsToExit(room, d)) { kept = room.doors[d].destDoor || OPP[d]; break; }
-      }
-      if (kept != null) break;
-    }
-  }
-  if (kept == null) return;
-  clearLinksIntoExit(state.exitRoom, kept);
-}
-function clearLinksIntoExit(keepRoom, keepDir) {
-  const exitId = state.exitRoom;
-  let keepOther = null, keepOtherDir = null;
-  if (keepRoom != null) {
-    const keep = state.rooms.find(r => r.id === keepRoom);
-    if (keep && doorExists(keep, keepDir)) {
-      keepOther = +keep.doors[keepDir].to;
-      keepOtherDir = keep.doors[keepDir].destDoor || OPP[keepDir];
-    }
-  }
-  state.rooms.forEach(room => {
-    DIRS.forEach(dir => {
-      if (keepRoom != null && room.id === keepRoom && dir === keepDir) return;
-      if (keepOther != null && room.id === keepOther && dir === keepOtherDir) return;
-      if (!doorExists(room, dir)) return;
-      if (room.id === exitId || +room.doors[dir].to === exitId) clearDoor(room.id, dir);
-    });
-  });
-}
-function doorOnExitRoom() {
-  const exit = state.rooms.find(r => r.id === state.exitRoom);
-  if (exit) {
-    for (const d of DIRS) if (doorExists(exit, d)) return d;
-  }
-  for (const room of state.rooms) {
-    if (room.id === state.exitRoom) continue;
-    for (const d of DIRS) {
-      if (leadsToExit(room, d)) return room.doors[d].destDoor || OPP[d];
-    }
-  }
-  return null;
 }
 function syncExitDoorFromLinks() {
-  const d = doorOnExitRoom();
-  if (d) state.exitDoor = DIR_BIT[d];
-}
-function connectDoors(aId, aDir, bId, bDir) {
-  const A = state.rooms.find(r => r.id === aId);
-  const B = state.rooms.find(r => r.id === bId);
-  if (!A || !B) return;
-  const touchesExit = (aId === state.exitRoom || bId === state.exitRoom);
-  if (touchesExit) clearLinksIntoExit(null, null);
-  clearDoor(aId, aDir); clearDoor(bId, bDir);
-  A.doors[aDir].to = bId; A.doors[aDir].destDoor = bDir;
-  B.doors[bDir].to = aId; B.doors[bDir].destDoor = aDir;
-  if (bId === state.exitRoom) { A.doors[aDir].closed = true; B.doors[bDir].closed = false; }
-  if (aId === state.exitRoom) { B.doors[bDir].closed = true; A.doors[aDir].closed = false; }
-  if (touchesExit) {
-    const exit = state.rooms.find(r => r.id === state.exitRoom);
-    if (exit) ensureLevelUpFloor(exit);
-    state.exitDoor = DIR_BIT[aId === state.exitRoom ? aDir : bDir];
+  for (const r of state.rooms) {
+    for (const d of DIRS) {
+      if (leadsToExit(r, d)) {
+        const dest = r.doors[d].destDoor || OPP[d];
+        state.exitDoor = DIR_BIT[dest];
+        return;
+      }
+    }
   }
 }
+
 function drawLinks() {
   const svg = document.getElementById('lines');
   const top = document.getElementById('toplines');
-  [...svg.querySelectorAll('line')].forEach(n => n.remove());
-  if (top) [...top.querySelectorAll('line')].forEach(n => n.remove());
+  if (!svg || !top) return;
+  svg.innerHTML = '';
+  top.innerHTML = '';
   const seen = new Set();
   state.rooms.forEach(room => {
     DIRS.forEach(dir => {
@@ -879,7 +848,6 @@ function renderRoomEditor() {
   for (let t = 0; t < 25; t++) tiles.push(t);
   tiles.sort((a,b) => tileDepth(a) - tileDepth(b));
 
-  // painter order matches the game z-buffer: N, E, tiles/items, S, W
   placeDoorBits(wrap, room, 'N');
   placeDoorBits(wrap, room, 'E');
   tiles.forEach(t => {
@@ -985,8 +953,8 @@ DIRS.forEach(d => {
       const dest = +v;
       if (!state.rooms.find(r => r.id === dest)) {
         const nr = emptyRoom(dest);
-        nr.x = room.x + ({N:0,E:150,S:0,W:-150}[d]);
-        nr.y = room.y + ({N:-150,E:0,S:150,W:0}[d]);
+        nr.x = snap(room.x + ({N:0,E:140,S:0,W:-140}[d]));
+        nr.y = snap(room.y + ({N:-140,E:0,S:140,W:0}[d]));
         state.rooms.push(nr); state.rooms.sort((a,b)=>a.id-b.id);
       }
       connectDoors(room.id, d, dest, OPP[d]);
@@ -1087,6 +1055,8 @@ function exportLevelFrom(src) {
     out += `  ${bin8(inf.inRoom & 0x3f)}, ${bin8(inf.mask)}, // I${i}\n`;
   });
   out += '};\n';
+  const layout = list.map(r => r.id + ':' + snap(r.x) + ',' + snap(r.y)).join(' ');
+  out += '// LAYOUT ' + layout + '\n';
   return out;
 }
 function exportLevel() {
@@ -1109,8 +1079,19 @@ function unpackEnt(byte) {
   if (!byte) return {on:false, type:0, tile:0};
   return {on:true, type: byte & 7, tile: (byte >> 3) & 0x1f};
 }
+function parseLayoutComment(raw) {
+  const m = raw.match(/\/\/\s*LAYOUT\s+([^\n]+)/i);
+  if (!m) return null;
+  const pos = {};
+  m[1].trim().split(/\s+/).forEach(tok => {
+    const p = tok.match(/^(\d+)\s*:\s*(-?\d+)\s*,\s*(-?\d+)$/);
+    if (p) pos[+p[1]] = { x: snap(+p[2]), y: snap(+p[3]) };
+  });
+  return pos;
+}
 function importLevel() {
   const raw = document.getElementById('out').value;
+  const layout = parseLayoutComment(raw);
   const tokens = raw.replace(/\{/g,' ').replace(/\}/g,' ').split(/[,\n]/).map(parseByte).filter(v => v !== null);
   if (tokens.length < 5) { alert('Could not parse array'); return; }
   let i = 0;
@@ -1138,8 +1119,9 @@ function importLevel() {
     room.enemy2 = unpackEnt(tokens[i++]||0);
     room.object = unpackEnt(tokens[i++]||0);
     for (let f=0;f<5;f++) room.floors[f] = unpackEnt(tokens[i++]||0);
-    room.x = 40 + (r % 6) * 140;
-    room.y = 40 + Math.floor(r / 6) * 140;
+    const pos = (layout && layout[r]) ? layout[r] : defaultRoomPos(r);
+    room.x = pos.x;
+    room.y = pos.y;
     state.rooms.push(room);
   }
   state.transporters = [];
@@ -1154,7 +1136,6 @@ function importLevel() {
     mask = tokens[i++]||0;
     state.influences.push({ inRoom, atRoom, mask });
   }
-  // Match T/S tables the same way export builds them: rooms in id order that have the object.
   let ti = 0, ii = 0;
   state.rooms.forEach(room => {
     room.teleportTo = null;
@@ -1179,8 +1160,6 @@ function importLevel() {
 renderLevelList();
 applyZoom();
 renderMap();
-
 </script>
-
 </body>
 </html>
