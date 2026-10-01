@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ESCD_AB Level Editor 0.8.7</title>
+<title>ESCD_AB Level Editor 0.8.8</title>
 <style>
   :root {
     --bg: #fefefd; --panel: #f5f5f3; --ink: #333; --muted: #6b5f5e;
@@ -145,7 +145,7 @@
   <a class="site-logo" href="https://t-arg.github.io/" title="TEAM a.r.g." target="_blank" rel="noopener noreferrer">
     <img src="https://t-arg.github.io/images/TEAMarg.gif" alt="TEAM a.r.g.">
   </a>
-  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.7</span></h1>
+  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.8</span></h1>
   <button id="btnAdd">Add room</button>
   <button id="btnDel">Delete selected</button>
   <button id="btnExport">Refresh export</button>
@@ -1007,7 +1007,11 @@ function packDoorByte(room, dir) {
 }
 function packEnt(ent) {
   if (!ent.on) return 0;
-  return ((ent.tile & 0x1f) << 3) | (ent.type & 7);
+  // Type 0 on tile 0 would pack to 0, which the game treats as empty.
+  // Tile 25 is unused (valid tiles are 0–24) and maps back to tile 0.
+  let tile = ent.tile & 0x1f;
+  if (tile === 0 && (ent.type & 7) === 0) tile = 25;
+  return (tile << 3) | (ent.type & 7);
 }
 function bin8(n) { return '0b' + (n & 255).toString(2).padStart(8,'0'); }
 
@@ -1046,7 +1050,8 @@ function exportLevelFrom(src) {
       flags, packDoorByte(r,'N'), packDoorByte(r,'E'), packDoorByte(r,'S'), packDoorByte(r,'W'),
       packEnt(r.enemy1), packEnt(r.enemy2), packEnt(r.object), ...r.floors.map(packEnt)
     ];
-    out += '  ' + bytes.map(bin8).join(', ') + `, // room${r.id}\n`;
+    const obj = r.object.on ? OBJECT[r.object.type] + ' t' + r.object.tile : '';
+    out += '  ' + bytes.map(bin8).join(', ') + `, // room${r.id}` + (obj ? ' ' + obj : '') + `\n`;
   });
   out += `\n  // transporters\n`;
   src.transporters.slice(0,nT).forEach((t,i) => { out += `  ${bin8(t & 0x3f)}, // T${i}\n`; });
@@ -1077,7 +1082,9 @@ function unpackDoor(byte, room, dir) {
 }
 function unpackEnt(byte) {
   if (!byte) return {on:false, type:0, tile:0};
-  return {on:true, type: byte & 7, tile: (byte >> 3) & 0x1f};
+  let tile = (byte >> 3) & 0x1f;
+  if (tile === 25) tile = 0;
+  return {on:true, type: byte & 7, tile: tile};
 }
 function parseLayoutComment(raw) {
   const m = raw.match(/\/\/\s*LAYOUT\s+([^\n]+)/i);
