@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ESCD_AB Level Editor 0.8.13</title>
+<title>ESCD_AB Level Editor 0.8.14</title>
 <style>
   :root {
     --bg: #fefefd; --panel: #f5f5f3; --ink: #333; --muted: #6b5f5e;
@@ -145,11 +145,13 @@
   <a class="site-logo" href="https://t-arg.github.io/" title="TEAM a.r.g." target="_blank" rel="noopener noreferrer">
     <img src="https://t-arg.github.io/images/TEAMarg.gif" alt="TEAM a.r.g.">
   </a>
-  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.13</span></h1>
+  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.14</span></h1>
   <button id="btnAdd">Add room</button>
   <button id="btnDel">Delete selected</button>
   <button id="btnExport">Refresh export</button>
   <button id="btnImport">Import from textarea</button>
+  <button id="btnImportFile">Import levels.h</button>
+  <input id="fileLevels" type="file" accept=".h,.c,.txt" hidden>
 </header>
 <div class="layout">
   <div class="panel">
@@ -165,7 +167,7 @@
       <button id="btnAddLevel">Add level</button>
       <button id="btnRemoveLevel">Remove level</button>
     </div>
-    <div class="row"><label>Level name</label><input id="levelName" value="level00" readonly></div>
+    <div class="row"><label>Level name</label><input id="levelName" value="level00" readonly title="Taken from the PROGMEM array name"></div>
     <div class="row"><label>Exit room</label><input id="exitRoom" type="number" min="0" max="31" value="2"></div>
     <div class="row"><label>Leading room</label><input id="leadRoom" type="number" disabled title="Upper 6 bits: room whose door leads into the exit room"></div>
     <div class="row">
@@ -280,7 +282,7 @@ function levelNameFor(i){return "level"+String(i).padStart(2,"0");}
 function makeLevel(i){return {rooms:[emptyRoom(0)],selected:0,transporters:[],influences:[],exitRoom:2,exitDoor:0,levelName:levelNameFor(i),zoom:1,editRoom:null};}
 const project={levels:[makeLevel(0)],current:0};
 let state=project.levels[0];
-function syncLevelNames(){project.levels.forEach(function(lv,i){lv.levelName=levelNameFor(i);});}
+function syncLevelNames(){project.levels.forEach(function(lv,i){if(!lv.levelName)lv.levelName=levelNameFor(i);});}
 function renderLevelList(){var sel=document.getElementById("levelList");if(!sel)return;sel.innerHTML=project.levels.map(function(lv,i){return "<option value="+i+(i===project.current?" selected":"")+">"+lv.levelName+"</option>";}).join("");var tag=document.getElementById("selLevel");if(tag)tag.textContent="#"+String(project.current).padStart(2,"0");}
 function switchLevel(i){if(i<0||i>=project.levels.length)return;project.current=i;state=project.levels[i];var z=document.getElementById("zoom");if(z)z.value=Math.round((state.zoom||1)*100);applyZoom();renderLevelList();renderMap();}
 function addLevel(){var i=project.levels.length;if(i>=32){alert("Max 32 levels");return;}project.levels.push(makeLevel(i));switchLevel(i);}
@@ -1012,6 +1014,15 @@ document.getElementById('exitRoom').onchange = e => {
 document.getElementById('exitDoor').onchange = () => { syncExitDoorFromLinks(); renderPanel(); };
 document.getElementById('btnExport').onclick = exportLevel;
 document.getElementById('btnImport').onclick = importLevel;
+document.getElementById('btnImportFile').onclick = () => document.getElementById('fileLevels').click();
+document.getElementById('fileLevels').onchange = e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => importLevelsFile(String(reader.result || ''));
+  reader.readAsText(file);
+};
 document.getElementById('btnClose').onclick = closeRoomEditor;
 document.getElementById('modalback').addEventListener('click', e => { if (e.target.id === 'modalback') closeRoomEditor(); });
 document.getElementById('zoom').addEventListener('input', e => { state.zoom = (+e.target.value)/100; applyZoom(); });
@@ -1089,8 +1100,33 @@ function parseByte(tok) {
   if (!tok) return null;
   if (tok.startsWith('0b') || tok.startsWith('0B')) return parseInt(tok.slice(2), 2);
   if (tok.startsWith('0x') || tok.startsWith('0X')) return parseInt(tok, 16);
+  if (/^[\d\s()<>|&+-]+$/.test(tok) && /\d/.test(tok)) {
+    try {
+      const v = Function('"use strict"; return (' + tok + ')')();
+      return Number.isFinite(v) ? (v & 255) : null;
+    } catch (e) { return null; }
+  }
   const n = parseInt(tok, 10);
   return Number.isFinite(n) ? n : null;
+}
+function levelNameFromText(raw) {
+  const m = raw.match(/const\s+unsigned\s+char\s+PROGMEM\s+([A-Za-z_]\w*)\s*\[/);
+  return m ? m[1] : null;
+}
+function splitLevelArrays(text) {
+  const re = /const\s+unsigned\s+char\s+PROGMEM\s+([A-Za-z_]\w*)\s*\[\s*\]\s*=\s*\{/g;
+  const found = [];
+  let m;
+  while ((m = re.exec(text))) {
+    let depth = 1, i = m.index + m[0].length;
+    while (i < text.length && depth) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') depth--;
+      i++;
+    }
+    found.push({ name: m[1], body: text.slice(m.index, i) });
+  }
+  return found;
 }
 function unpackDoor(byte, room, dir) {
   if (!byte) { room.doors[dir].to = null; return; }
@@ -1115,17 +1151,46 @@ function parseLayoutComment(raw) {
 }
 function importLevel() {
   const raw = document.getElementById('out').value;
+  const named = levelNameFromText(raw);
+  if (named) state.levelName = named;
+  if (!fillLevelFromText(state, raw)) return;
+  renderLevelList();
+  renderMap();
+}
+function importLevelsFile(text) {
+  const parts = splitLevelArrays(text);
+  if (!parts.length) { alert('No PROGMEM level arrays found'); return; }
+  if (parts.length > 32) { alert('Max 32 levels'); return; }
+  const levels = [];
+  for (const part of parts) {
+    const lv = makeLevel(levels.length);
+    lv.levelName = part.name;
+    if (!fillLevelFromText(lv, part.body)) {
+      alert('Could not parse ' + part.name);
+      return;
+    }
+    levels.push(lv);
+  }
+  project.levels = levels;
+  project.current = 0;
+  state = project.levels[0];
+  document.getElementById('out').value = exportLevelFrom(state);
+  renderLevelList();
+  applyZoom();
+  renderMap();
+}
+function fillLevelFromText(level, raw) {
   const layout = parseLayoutComment(raw);
   const body = raw.replace(/\/\/\s*LAYOUT\b[^\n]*/gi, '').replace(/\{/g,' ').replace(/\}/g,' ');
   const tokens = body.split(/[,\n]/).map(parseByte).filter(v => v !== null);
-  if (tokens.length < 5) { alert('Could not parse array'); return; }
+  if (tokens.length < 5) { alert('Could not parse array'); return false; }
   let i = 0;
   const nRooms = tokens[i++], nT = tokens[i++], nI = tokens[i++];
   const nextDoor = tokens[i++], nextRoom = tokens[i++];
-  state.exitDoor = nextDoor & 3;
-  state.leadRoom = (nextDoor >> 2) & 0x3f;
-  state.exitRoom = nextRoom & 0x3f;
-  state.rooms = [];
+  level.exitDoor = nextDoor & 3;
+  level.leadRoom = (nextDoor >> 2) & 0x3f;
+  level.exitRoom = nextRoom & 0x3f;
+  level.rooms = [];
   for (let r = 0; r < nRooms; r++) {
     const room = emptyRoom(r);
     const flags = tokens[i++] || 0;
@@ -1149,34 +1214,37 @@ function importLevel() {
     const pos = (layout && layout[r]) ? layout[r] : defaultRoomPos(r);
     room.x = pos.x;
     room.y = pos.y;
-    state.rooms.push(room);
+    level.rooms.push(room);
   }
-  state.transporters = [];
-  for (let t=0;t<nT;t++) state.transporters.push((tokens[i++]||0) & 0x3f);
-  state.influences = [];
+  level.transporters = [];
+  for (let t=0;t<nT;t++) level.transporters.push((tokens[i++]||0) & 0x3f);
+  level.influences = [];
   for (let k=0;k<nI;k++) {
     const inRoom = (tokens[i++]||0)&0x3f;
     const mask = (tokens[i++]||0) & 0x1f;
-    state.influences.push({ inRoom, atRoom: 0, mask });
+    level.influences.push({ inRoom, atRoom: 0, mask });
   }
   let ti = 0, ii = 0;
-  state.rooms.forEach(room => {
+  level.rooms.forEach(room => {
     room.teleportTo = null;
     room.switchTo = null;
-    if (hasTeleport(room)) room.teleportTo = state.transporters[ti++] ?? 0;
+    if (hasTeleport(room)) room.teleportTo = level.transporters[ti++] ?? 0;
     if (hasSwitch(room)) {
-      const inf = state.influences[ii++];
+      const inf = level.influences[ii++];
       if (inf) {
         room.switchTo = inf.inRoom;
         room.switchMask = inf.mask & 0x1f;
       }
     }
   });
-  state.rooms.forEach(clearLevelUpFloor);
+  level.rooms.forEach(clearLevelUpFloor);
+  const prev = state;
+  state = level;
   pruneExtraExitLinks();
   syncExitDoorFromLinks();
-  state.selected = 0;
-  renderMap();
+  state = prev;
+  level.selected = 0;
+  return true;
 }
 
 renderLevelList();
