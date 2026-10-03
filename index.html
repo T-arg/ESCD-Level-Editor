@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ESCD_AB Level Editor 0.8.10</title>
+<title>ESCD_AB Level Editor 0.8.13</title>
 <style>
   :root {
     --bg: #fefefd; --panel: #f5f5f3; --ink: #333; --muted: #6b5f5e;
@@ -145,7 +145,7 @@
   <a class="site-logo" href="https://t-arg.github.io/" title="TEAM a.r.g." target="_blank" rel="noopener noreferrer">
     <img src="https://t-arg.github.io/images/TEAMarg.gif" alt="TEAM a.r.g.">
   </a>
-  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.10</span></h1>
+  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.13</span></h1>
   <button id="btnAdd">Add room</button>
   <button id="btnDel">Delete selected</button>
   <button id="btnExport">Refresh export</button>
@@ -200,7 +200,7 @@
     </p>
     <h2>Floor influence</h2>
     <p class="hint">
-      For the highlighted room (when it has a switch), tick which of its target room’s floor slots the switch toggles.
+      Switch OFF only. Tick which of the target room’s five floor slots toggle. Mask is the lower 5 bits: bit4 = floor 1 … bit0 = floor 5. Upper bits are not used.
     </p>
     <div id="infChecks"></div>
     <h2>C export</h2>
@@ -372,6 +372,9 @@ function doorClass(room, dir) {
   if (linkTouchesExit(room, dir)) return 'leveldoor exists';
   return doorIsClosed(room, dir) ? 'closed exists' : 'exists';
 }
+function levelHasBlackCard() {
+  return state.rooms.some(r => r.object.on && r.object.type === 0);
+}
 function hasTeleport(room) { return room.object.on && room.object.type === 5; }
 function hasSwitch(room) { return room.object.on && (room.object.type === 6 || room.object.type === 7); }
 function doorAnchor(room, dir) {
@@ -408,6 +411,11 @@ function applyZoom() {
 function topdownIndex(row, col) {
   return row * 5 + (4 - col);
 }
+function influencedFloorBits(room) {
+  const sw = state.rooms.find(r => r.id === state.selected);
+  if (!sw || !hasSwitch(sw) || sw.switchTo == null || sw.switchTo === '' || +sw.switchTo !== room.id) return 0;
+  return sw.switchMask & 0x1f;
+}
 function miniMark(room, t) {
   if (room.id === state.exitRoom && t === START_TILE) return {ch:'▲', bg:'#c060ff', fg:'#111'};
   if (room.id === 0 && t === START_TILE) return {ch:'D', bg:'#b7950b', fg:'#111'};
@@ -423,8 +431,13 @@ function miniMark(room, t) {
     if (ty === 5) return {ch:'T', bg:'#00e5ff', fg:'#111'};
     if (ty === 6 || ty === 7) return {ch:'S', bg:'#ff9100', fg:'#111'};
   }
-  for (const f of room.floors) {
-    if (f.on && f.tile === t && f.type !== LEVEL_UP_TYPE) return {ch:'F', bg:'#e67e22', fg:'#111'};
+  const inf = influencedFloorBits(room);
+  for (let i = 0; i < room.floors.length; i++) {
+    const f = room.floors[i];
+    if (f.on && f.tile === t && f.type !== LEVEL_UP_TYPE) {
+      const on = !!(inf & (1 << (4 - i)));
+      return {ch:'F', bg:'#e67e22', fg: on ? '#fff' : '#111'};
+    }
   }
   return null;
 }
@@ -727,17 +740,20 @@ function renderPanel() {
   if (!hasSwitch(room)) {
     box.innerHTML = '<p class="hint">Highlight a room that contains a switch to edit floor influence.</p>';
   } else {
+    room.switchMask &= 0x1f;
     box.innerHTML = [1,2,3,4,5].map(i => {
       const bit = 5 - i;
       const on = !!(room.switchMask & (1 << bit));
-      return `<div class="row"><label>Floor ${i}</label><label><input type="checkbox" data-bit="${bit}" ${on?'checked':''}> influenced</label></div>`;
+      return `<div class="row"><label>Floor ${i}</label><label><input type="checkbox" data-bit="${bit}" ${on?'checked':''}> bit ${bit}</label></div>`;
     }).join('');
     box.querySelectorAll('[data-bit]').forEach(inp => {
       inp.addEventListener('change', () => {
         const bit = +inp.dataset.bit;
         if (inp.checked) room.switchMask |= (1 << bit);
         else room.switchMask &= ~(1 << bit);
+        room.switchMask &= 0x1f;
         exportLevel();
+        renderMap();
       });
     });
   }
@@ -899,7 +915,7 @@ function renderRoomEditor() {
   pal.innerHTML = '';
   const items = [
     ...ENEMY.map((n,i) => ({kind:'enemy', type:i, label:n})),
-    ...OBJECT.map((n,i) => ({kind:'object', type:i, label:n})),
+    ...OBJECT.map((n,i) => ({kind:'object', type:i, label:n})).filter(spec => spec.type !== 7 && !(spec.type === 0 && levelHasBlackCard())),
     ...[1,2,3,4].map(i => ({kind:'floor', type:i, label:FLOOR[i]}))
   ];
   items.forEach(spec => {
@@ -928,6 +944,10 @@ function renderRoomEditor() {
 }
 
 function placeOnTile(room, tile, spec) {
+  if (spec.kind === 'object' && spec.type === 0 && levelHasBlackCard()) {
+    alert('Only one black card per level');
+    return;
+  }
   const err = canPlace(room, tile, spec.kind, spec.type, null);
   if (err) { alert(err); return; }
   const key = freeSlot(room, spec.kind);
@@ -1017,7 +1037,7 @@ function exportLevelFrom(src) {
   src.influences = rooms.filter(hasSwitch).map(r => ({
     inRoom: r.switchTo == null ? 0 : +r.switchTo,
     atRoom: r.id,
-    mask: r.switchMask & 255
+    mask: r.switchMask & 0x1f
   }));
   const maxId = rooms.reduce((m,r)=>Math.max(m,r.id),0);
   const byId = {}; rooms.forEach(r => byId[r.id] = r);
@@ -1096,7 +1116,8 @@ function parseLayoutComment(raw) {
 function importLevel() {
   const raw = document.getElementById('out').value;
   const layout = parseLayoutComment(raw);
-  const tokens = raw.replace(/\{/g,' ').replace(/\}/g,' ').split(/[,\n]/).map(parseByte).filter(v => v !== null);
+  const body = raw.replace(/\/\/\s*LAYOUT\b[^\n]*/gi, '').replace(/\{/g,' ').replace(/\}/g,' ');
+  const tokens = body.split(/[,\n]/).map(parseByte).filter(v => v !== null);
   if (tokens.length < 5) { alert('Could not parse array'); return; }
   let i = 0;
   const nRooms = tokens[i++], nT = tokens[i++], nI = tokens[i++];
@@ -1123,6 +1144,7 @@ function importLevel() {
     room.enemy1 = unpackEnt(tokens[i++]||0);
     room.enemy2 = unpackEnt(tokens[i++]||0);
     room.object = unpackEnt(tokens[i++]||0);
+    if (room.object.on && room.object.type === 7) room.object.type = 6;
     for (let f=0;f<5;f++) room.floors[f] = unpackEnt(tokens[i++]||0);
     const pos = (layout && layout[r]) ? layout[r] : defaultRoomPos(r);
     room.x = pos.x;
@@ -1132,14 +1154,10 @@ function importLevel() {
   state.transporters = [];
   for (let t=0;t<nT;t++) state.transporters.push((tokens[i++]||0) & 0x3f);
   state.influences = [];
-  const infLeft = tokens.length - i;
-  const recSize = (nI > 0 && infLeft >= nI * 3) ? 3 : 2;
   for (let k=0;k<nI;k++) {
     const inRoom = (tokens[i++]||0)&0x3f;
-    let atRoom = 0, mask;
-    if (recSize === 3) atRoom = (tokens[i++]||0)&0x3f;
-    mask = tokens[i++]||0;
-    state.influences.push({ inRoom, atRoom, mask });
+    const mask = (tokens[i++]||0) & 0x1f;
+    state.influences.push({ inRoom, atRoom: 0, mask });
   }
   let ti = 0, ii = 0;
   state.rooms.forEach(room => {
@@ -1150,7 +1168,7 @@ function importLevel() {
       const inf = state.influences[ii++];
       if (inf) {
         room.switchTo = inf.inRoom;
-        room.switchMask = inf.mask;
+        room.switchMask = inf.mask & 0x1f;
       }
     }
   });
