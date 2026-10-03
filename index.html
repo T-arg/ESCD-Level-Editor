@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ESCD_AB Level Editor 0.8.8</title>
+<title>ESCD_AB Level Editor 0.8.9</title>
 <style>
   :root {
     --bg: #fefefd; --panel: #f5f5f3; --ink: #333; --muted: #6b5f5e;
@@ -145,7 +145,7 @@
   <a class="site-logo" href="https://t-arg.github.io/" title="TEAM a.r.g." target="_blank" rel="noopener noreferrer">
     <img src="https://t-arg.github.io/images/TEAMarg.gif" alt="TEAM a.r.g.">
   </a>
-  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.8</span></h1>
+  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.9</span></h1>
   <button id="btnAdd">Add room</button>
   <button id="btnDel">Delete selected</button>
   <button id="btnExport">Refresh export</button>
@@ -167,16 +167,17 @@
     </div>
     <div class="row"><label>Level name</label><input id="levelName" value="level00" readonly></div>
     <div class="row"><label>Exit room</label><input id="exitRoom" type="number" min="0" max="31" value="2"></div>
+    <div class="row"><label>Leading room</label><input id="leadRoom" type="number" disabled title="Upper 6 bits: room whose door leads into the exit room"></div>
     <div class="row">
-      <label>Exit door</label>
-      <select id="exitDoor" disabled title="Set by the purple link into the exit room">
-        <option value="0">NORTH</option>
-        <option value="1">EAST</option>
-        <option value="2">SOUTH</option>
-        <option value="3">WEST</option>
+      <label>Door to exit</label>
+      <select id="exitDoor" disabled title="Lower 2 bits: door in the leading room. 00 NORTH, 01 EAST, 10 SOUTH, 11 WEST">
+        <option value="0">NORTH (00)</option>
+        <option value="1">EAST (01)</option>
+        <option value="2">SOUTH (10)</option>
+        <option value="3">WEST (11)</option>
       </select>
     </div>
-    <p class="hint">Read-only: door in the next-level room, taken from the <b style="color:#c060ff">purple</b> link (the door you walk through leaving the previous room into the exit room).</p>
+    <p class="hint">Read-only, from the <b style="color:#c060ff">purple</b> link. Exported as one byte: upper 6 bits = room leading to the exit room, lower 2 bits = that room's door (00 NORTH, 01 EAST, 10 SOUTH, 11 WEST). Not the exit room itself.</p>
     <h2>Selected room <span id="selTitle">—</span></h2>
     <p class="hint">Map is top-down (north is up). Double-click a room to edit it in isometric view. Rooms snap to the 20px grid.</p>
     <table>
@@ -341,7 +342,17 @@ function doorExists(room, dir) {
   return t !== null && t !== '';
 }
 function isLevelDoor(room, dir) {
-  return room.id === state.exitRoom && DIR_BIT[dir] === state.exitDoor;
+  return room.id === state.leadRoom && DIR_BIT[dir] === state.exitDoor;
+}
+function leadLink(src) {
+  for (const r of src.rooms) {
+    for (const d of DIRS) {
+      const door = r.doors && r.doors[d];
+      if (door && door.to !== null && door.to !== '' && +door.to === src.exitRoom)
+        return { room: r.id & 0x3f, bit: DIR_BIT[d] & 3, dir: d };
+    }
+  }
+  return null;
 }
 function leadsToExit(room, dir) {
   return doorExists(room, dir) && +room.doors[dir].to === state.exitRoom;
@@ -648,15 +659,9 @@ function pruneExtraExitLinks(keepFrom, keepDir) {
   });
 }
 function syncExitDoorFromLinks() {
-  for (const r of state.rooms) {
-    for (const d of DIRS) {
-      if (leadsToExit(r, d)) {
-        const dest = r.doors[d].destDoor || OPP[d];
-        state.exitDoor = DIR_BIT[dest];
-        return;
-      }
-    }
-  }
+  const lead = leadLink(state);
+  state.leadRoom = lead ? lead.room : null;
+  if (lead) state.exitDoor = lead.bit;
 }
 
 function drawLinks() {
@@ -720,6 +725,8 @@ function renderPanel() {
   document.getElementById('levelName').value = state.levelName;
   document.getElementById('exitRoom').value = state.exitRoom;
   syncExitDoorFromLinks();
+  const leadEl = document.getElementById('leadRoom');
+  if (leadEl) leadEl.value = state.leadRoom == null ? '' : state.leadRoom;
   document.getElementById('exitDoor').value = state.exitDoor;
   if (!room) return;
   DIRS.forEach(d => {
@@ -1029,13 +1036,14 @@ function exportLevelFrom(src) {
   for (let i=0;i<=maxId;i++) list.push(byId[i] || emptyRoom(i));
   const nT = Math.min(16, src.transporters.length);
   const nI = Math.min(16, src.influences.length);
-  const nextDoor = ((src.exitRoom & 0x3f) << 2) | (src.exitDoor & 3);
+  const lead = leadLink(src);
+  const nextDoor = lead ? ((lead.room << 2) | lead.bit) : (src.exitDoor & 3);
   let out = `const unsigned char PROGMEM ${src.levelName}[] =\n{\n`;
   out += `  ${list.length},          // amount of rooms\n`;
   out += `  ${nT},          // amount of transporters\n`;
   out += `  ${nI},          // amount of rooms with influenceable objects\n\n`;
-  out += `  ${bin8(nextDoor)},  // NEXT LEVEL DOOR\n`;
-  out += `  ${bin8(src.exitRoom)},  // NEXT LEVEL ROOM\n\n`;
+  out += `  ${bin8(nextDoor)},  // ROOM AND DOOR LEADING TO NEXT LEVEL ROOM\n`;
+  out += `  ${bin8(src.exitRoom & 0x3f)},  // NEXT LEVEL ROOM\n\n`;
   list.forEach(r => {
     let flags = 0;
     if (doorExists(r,'N')) flags |= 0b00010000;
@@ -1105,6 +1113,7 @@ function importLevel() {
   const nRooms = tokens[i++], nT = tokens[i++], nI = tokens[i++];
   const nextDoor = tokens[i++], nextRoom = tokens[i++];
   state.exitDoor = nextDoor & 3;
+  state.leadRoom = (nextDoor >> 2) & 0x3f;
   state.exitRoom = nextRoom & 0x3f;
   state.rooms = [];
   for (let r = 0; r < nRooms; r++) {
