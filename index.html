@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ESCD_AB Level Editor 0.8.9</title>
+<title>ESCD_AB Level Editor 0.8.10</title>
 <style>
   :root {
     --bg: #fefefd; --panel: #f5f5f3; --ink: #333; --muted: #6b5f5e;
@@ -145,7 +145,7 @@
   <a class="site-logo" href="https://t-arg.github.io/" title="TEAM a.r.g." target="_blank" rel="noopener noreferrer">
     <img src="https://t-arg.github.io/images/TEAMarg.gif" alt="TEAM a.r.g.">
   </a>
-  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.9</span></h1>
+  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.10</span></h1>
   <button id="btnAdd">Add room</button>
   <button id="btnDel">Delete selected</button>
   <button id="btnExport">Refresh export</button>
@@ -321,8 +321,8 @@ function isLevelUpTile(room, tile) {
 function canPlace(room, tile, kind, type, exceptKey) {
   if (tile < 0 || tile > 24) return 'Invalid tile';
   if (isStartBlocked(room, tile)) return 'Tile 12 in room 0 is the droid start';
-  if (isLevelUpTile(room, tile)) return 'Tile 12 in the exit room is the level-up floor';
-  if (kind === 'floor' && type === LEVEL_UP_TYPE) return 'Level-up floor is automatic';
+  if (isLevelUpTile(room, tile)) return 'Tile 12 in the exit room is the exit (from NEXT LEVEL ROOM, not a placed tile)';
+  if (kind === 'floor' && type === LEVEL_UP_TYPE) return 'Exit is not a floor tile';
   const hit = occupiedBy(room, tile, exceptKey);
   if (hit) return 'Tile already used by ' + hit.label;
   return null;
@@ -384,19 +384,9 @@ function handleAnchor(room, kind) {
   return { x: room.x + 4 + 7, y: room.y + 108 - 4 - 7 };
 }
 
-function ensureLevelUpFloor(room) {
-  const existing = room.floors.find(f => f.on && f.type === LEVEL_UP_TYPE);
-  if (existing) { existing.tile = START_TILE; return; }
-  const taken = occupiedBy(room, START_TILE, null);
-  if (taken && taken.kind !== 'floor') {
-    getEnt(room, taken.key).on = false;
-  }
-  let slot = room.floors.find(f => !f.on || f.type === LEVEL_UP_TYPE);
-  if (!slot) slot = room.floors[4];
-  slot.on = true; slot.type = LEVEL_UP_TYPE; slot.tile = START_TILE;
-}
 function clearLevelUpFloor(room) {
-  room.floors.forEach(f => { if (f.type === LEVEL_UP_TYPE) f.on = false; });
+  if (!room) return;
+  room.floors.forEach(f => { if ((f.type & 7) === LEVEL_UP_TYPE) f.on = false; });
 }
 
 function sizeMap() {
@@ -994,8 +984,7 @@ document.getElementById('btnExportH').onclick = exportLevelsH;
 document.getElementById('levelName').onchange = e => { state.levelName = e.target.value; exportLevel(); };
 document.getElementById('exitRoom').onchange = e => {
   state.exitRoom = +e.target.value;
-  const exit = state.rooms.find(r => r.id === state.exitRoom);
-  if (exit) ensureLevelUpFloor(exit);
+  state.rooms.forEach(clearLevelUpFloor);
   pruneExtraExitLinks();
   syncExitDoorFromLinks();
   renderMap();
@@ -1013,7 +1002,7 @@ function packDoorByte(room, dir) {
   return ((d.to & 0x3f) << 2) | (DIR_BIT[d.destDoor || OPP[dir]] & 3);
 }
 function packEnt(ent) {
-  if (!ent.on) return 0;
+  if (!ent.on || (ent.type & 7) === LEVEL_UP_TYPE) return 0;
   // Type 0 on tile 0 would pack to 0, which the game treats as empty.
   // Tile 25 is unused (valid tiles are 0–24) and maps back to tile 0.
   let tile = ent.tile & 0x1f;
@@ -1165,8 +1154,7 @@ function importLevel() {
       }
     }
   });
-  const exit = state.rooms.find(r => r.id === state.exitRoom);
-  if (exit) ensureLevelUpFloor(exit);
+  state.rooms.forEach(clearLevelUpFloor);
   pruneExtraExitLinks();
   syncExitDoorFromLinks();
   state.selected = 0;
