@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ESCD_AB Level Editor 0.8.17</title>
+<title>ESCD_AB Level Editor v1.0.0</title>
 <style>
   :root {
     --bg: #fefefd; --panel: #f5f5f3; --ink: #333; --muted: #6b5f5e;
@@ -18,6 +18,8 @@
   .site-logo { display: flex; align-items: center; flex-shrink: 0; }
   .site-logo img { height: 48px; width: auto; display: block; }
   header h1 { font-size: 16px; margin: 0; color: #4a3b3a; letter-spacing: .04em; }
+  .bmc-slot { margin-left: auto; display: flex; align-items: center; }
+  .bmc-slot img { height: 40px; }
   button, select, input {
     background: #4a3b3a; color: #fefefd; border: 1px solid #4a3b3a;
     padding: 4px 8px; border-radius: 3px;
@@ -145,13 +147,16 @@
   <a class="site-logo" href="https://t-arg.github.io/" title="TEAM a.r.g." target="_blank" rel="noopener noreferrer">
     <img src="data:image/gif;base64,R0lGODlheQAuAMIFAEc8Okg8OUY9Nk5BPv7+/P///////////yH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAcALAAAAAB5AC4AAAP+eHrRHivKSau9OOudA/kf4HBkaZ5PCnEe6DrDKc/z0LpfEG83DqrAxo5GNNk+tkduiOklB74oTheswipJq5CSvSqOBHDux7T0WjCptKeO6iTJ9uu9EJMP4Dz0XKacpw8DXYFyhXR4bIUEh4lLLWINi1N9En9hUIBrSFoqmItfTlaeizF5aZJhjR6Cd2Yve6o4rDqoiks5iCBxakJkjze0m7qeHr24ri9twTlopLY/uDd2ysGRtbdiT2OLwILeOw5Tco2oy4q0VMLPzrqJ6T/h13MPCsU4AIMpAFL428/Fj/b5+KYJWhSBLkQY9BGpGKJp8v75wyGgokUBY6w16jL+ioy6dRPn2LDBgBtDkAbNwUshyF6qgSpcsCoHciY5ew0Y7Hp1aV01W+EAMgQyZwzEcc3cjMzZ0I1JnyF5WXspa+rNeCifDpUEQchUeMy+AopHzg0adw3fwTxqi61XkgA7ivjmDaEsb2jsUvu4UslBrFnL4uyapSqQjn3RIA7rV2HWTWJBkptLZQFAYFrWYL3KUi1Kv48jQua2AJ+xVEDm8tv8zLRZ0DAD6I3KSzOVFfVEnA3CjTNYoJFjvlZV9qRZESIipOhNFHDR38DHwp5H3J3T4TmVB+XNbHYOux4AeL+eODIB3Y3Q34uFfYKSKiuZPTe6mLkD9ETlM8YeP1P+e/foISebPOHMtBBXux2Wj3A92cfJfvKZx41ufsDHxnYQMsbJdvnpt6EVw4imYQWylShgdeLFlOCDCN6X4gMvarHPgwMKJiCJ8A1loYYf2lfeh5dlJqJ9OHKnY3M8inLEckkK1xyQto1QSYp03YddGsg5qANdg1xioJaBrJiWV1S0NF1f7kUyI2bBWRgJlwseKROceM35zSp7tMSNmebRU0lYjOkpHSFbFhfaY+OBIB6fR1ZSTGG3pTgojIvECOSlmLJ4Hj47LUGSZUFyqF+TsPAYJTVnUscgczsJYYef9Ty1HIMs1XlbGUFol6ujuxaJGwOmYQaJH6TAkA6DVQbN1YWuQIBaBbPNkvjErwzcBl1X9JiyCjN4GXpMmlbUE8ggzm65LIkvVBAsQ8Cet4K2jkDXxqe8unpuCqBIGUgd3iDzLQUC5BMDTnUIhAk+JT1aBXgVSlltdviKSwesGwwgEMIo/BABJOBo7O8n4Gb38AoRVzsErCpY8EQNXtTRchaUuLxEw0Hs0G3JeJgp8ZZF9HzCyjRHqx259VLs89E915rFyNUiMgI9uRqN9NQsoMxUNO8+jXXKaFDtNQl08VvKFoKI7XQpcJ79tQQJAAA7" alt="TEAM a.r.g.">
   </a>
-  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">0.8.17</span></h1>
+  <h1>ESCD_AB Level Editor <span style="color:#6b5f5e;font-weight:500">v1.0.0</span></h1>
   <button id="btnAdd">Add room</button>
   <button id="btnDel">Delete selected</button>
   <button id="btnExport">Refresh export</button>
   <button id="btnImport">Import from textarea</button>
   <button id="btnImportFile">Import levels.h</button>
   <input id="fileLevels" type="file" accept=".h,.c,.txt" hidden>
+  <div class="bmc-slot">
+    <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="TEAMarg" data-color="#5d4c4b" data-emoji="☕" data-font="Cookie" data-text="Cool tool? Buy us a coffee" data-outline-color="#fefefd" data-font-color="#fefefd" data-coffee-color="#FFDD00"></script>
+  </div>
 </header>
 <div class="layout">
   <div class="panel">
@@ -206,7 +211,7 @@
     </p>
     <div id="infChecks"></div>
     <h2>C export</h2>
-    <div class="row"><button id="btnExportH">Export level.h</button></div>
+    <div class="row"><button id="btnExportH">Export levels.h</button></div>
     <textarea id="out" spellcheck="false"></textarea>
     <p class="hint ok">Rooms are 0-based. Max 32 rooms. Map positions snap to the 20px grid and are stored in a <code>// LAYOUT</code> comment so import restores the same layout without compiling into the game.</p>
   </div>
@@ -305,7 +310,7 @@ function switchLevel(i){if(i<0||i>=project.levels.length)return;project.current=
 function addLevel(){var i=project.levels.length;if(i>=32){alert("Max 32 levels");return;}project.levels.push(makeLevel(i));switchLevel(i);}
 function removeLevel(){if(project.levels.length<=1){alert("Need at least one level");return;}project.levels.splice(project.current,1);syncLevelNames();switchLevel(Math.min(project.current,project.levels.length-1));}
 function levelsHHeader(){return ["#ifndef LEVELS_H","#define LEVELS_H","","#define MAX_AMOUNT_OF_ROOMS                       32","#define MAX_AMOUNT_OF_INFLUENCING_OBJECTS         16","#define MAX_AMOUNT_OF_TRANSPORTERS                16","#define AMOUNT_OF_ROOMS_AT_BYTE                   0","#define AMOUNT_OF_TRANSPORTERS_AT_BYTE            1","#define AMOUNT_OF_INFLUENCING_OBJECTS_AT_BYTE     2","#define LEVEL_DOOR_DATA_START_AT_BYTE             3","#define LEVEL_ROOM_DATA_START_AT_BYTE             4","#define ROOMS_DATA_START_AT_BYTE                  5","#define DOORS_DATA_START_AT_BYTE                  ROOMS_DATA_START_AT_BYTE + 1","#define ELEMENTS_DATA_START_AT_BYTE               ROOMS_DATA_START_AT_BYTE + 5","#define BYTES_USED_FOR_EVERY_ROOM                 13","",""].join(String.fromCharCode(10));}
-function exportLevelsH(){syncLevelNames();var NL=String.fromCharCode(10);var bodies=project.levels.map(function(lv){return exportLevelFrom(lv).trimEnd();});var names=project.levels.map(function(lv){return lv.levelName;});var out=levelsHHeader();out+=bodies.join(NL+NL)+NL+NL;out+="// pointer table in flash too - 2 bytes per level, no SRAM copy"+NL;out+="const unsigned char * const PROGMEM levels[] ="+NL+"{"+NL;out+="  "+names.join(", ")+NL+"};"+NL+NL;out+="#define AMOUNT_OF_LEVELS  (sizeof(levels) / sizeof(levels[0]))"+NL+NL;out+="#endif"+NL;var blob=new Blob([out],{type:"text/plain"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="level.h";a.click();URL.revokeObjectURL(a.href);}
+function exportLevelsH(){syncLevelNames();var NL=String.fromCharCode(10);var bodies=project.levels.map(function(lv){return exportLevelFrom(lv).trimEnd();});var names=project.levels.map(function(lv){return lv.levelName;});var out=levelsHHeader();out+=bodies.join(NL+NL)+NL+NL;out+="// pointer table in flash too - 2 bytes per level, no SRAM copy"+NL;out+="const unsigned char * const PROGMEM levels[] ="+NL+"{"+NL;out+="  "+names.join(", ")+NL+"};"+NL+NL;out+="#define AMOUNT_OF_LEVELS  (sizeof(levels) / sizeof(levels[0]))"+NL+NL;out+="#endif"+NL;var blob=new Blob([out],{type:"text/plain"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="levels.h";a.click();URL.revokeObjectURL(a.href);}
 
 function tileXY(t) { return { x: t % 5, y: Math.floor(t / 5) }; }
 function translateTileToX(t) { return (((((t / 5) | 0) * 6 + 4) - t) * 12) + 3; }
